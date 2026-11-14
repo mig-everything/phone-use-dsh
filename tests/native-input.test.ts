@@ -181,6 +181,98 @@ test('scroll_node uses native visible bounds without screenshots and rejects mov
     await f.close();
   }
 });
+test('navigation regions remain actionable outside the node budget or query, without authorizing hidden taps', async () => {
+  const f = await fixture();
+  const tree = f.adapter.tree.bind(f.adapter);
+  f.adapter.tree = async () => {
+    const [region] = await tree();
+    return [
+      { ...region!, type: 'List', scrollable: false },
+      {
+        ...region!,
+        id: 'search',
+        type: 'Button',
+        text: 'Search',
+        clickable: true,
+        scrollable: false,
+        bounds: { x: 10, y: 0, width: 80, height: 20 },
+      },
+      ...Array.from({ length: 8 }, (_, i) => ({ ...region!, id: `extra-${i}` })),
+    ];
+  };
+  try {
+    for (const capture of [false, true]) {
+      const result = capture
+        ? await f.service.observe(f.id, true, 1, 0, 'off')
+        : await f.service.inspect(f.id, 1, 'Search');
+      assert.deepEqual(
+        result.observation.nodes.map((n) => n.id),
+        ['search'],
+      );
+      const regions = result.observation.page!.scroll_regions;
+      assert(regions.some((r) => r.node_id === 'scroll'));
+      assert(!regions.some((r) => r.node_id === 'extra-7'));
+      await assert.rejects(
+        f.service.act(
+          f.id,
+          { kind: 'tap_node', node_id: 'scroll', observation_id: result.observation.id },
+          false,
+        ),
+        { code: 'NODE_NOT_FOUND' },
+      );
+      await assert.rejects(
+        f.service.act(
+          f.id,
+          {
+            kind: 'scroll_node',
+            node_id: 'extra-7',
+            observation_id: result.observation.id,
+            direction: 'down',
+          },
+          false,
+        ),
+        { code: 'NODE_NOT_SCROLLABLE' },
+      );
+      await f.service.act(
+        f.id,
+        {
+          kind: 'scroll_node',
+          node_id: 'scroll',
+          observation_id: result.observation.id,
+          direction: 'down',
+        },
+        false,
+      );
+      assert.deepEqual(f.adapter.commands.at(-1), {
+        kind: 'swipe',
+        x: 60,
+        y: 182,
+        toX: 60,
+        toY: 68,
+        durationMs: 400,
+      });
+    }
+    assert.equal(f.adapter.captures, 1, 'only the explicitly requested screenshot is captured');
+    const stale = await f.service.inspect(f.id, 1, 'Search');
+    f.adapter.moving = true;
+    await assert.rejects(
+      f.service.act(
+        f.id,
+        {
+          kind: 'scroll_node',
+          node_id: 'scroll',
+          observation_id: stale.observation.id,
+          direction: 'down',
+        },
+        false,
+      ),
+      { code: 'STALE_NODE' },
+    );
+    assert.equal(f.adapter.commands.length, 2);
+  } finally {
+    await f.close();
+  }
+});
 test('manual native finger excludes model input, isolates views and releases on cancellation/pause', async () => {
   const f = await fixture();
   try {

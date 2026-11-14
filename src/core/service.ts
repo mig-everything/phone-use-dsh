@@ -57,6 +57,7 @@ export interface InspectionResult {
 interface StoredObservation {
   observation: Observation | TreeObservation;
   nativeNodes: UINode[];
+  scrollNodes: UINode[];
   evidenceNodes: Map<string, UINode>;
   created: number;
   source: 'agent' | 'preview';
@@ -438,8 +439,14 @@ export class PhoneService {
     allNodes: UINode[] = nativeNodes,
   ) {
     const byId = new Map(allNodes.map((node) => [node.id, node]));
+    // Navigation is emitted independently of the node/query budget. Retain its
+    // advertised regions in driver coordinates, without granting hidden taps/text.
+    const scrollIds = new Set(observation.page?.scroll_regions.map((r) => r.node_id));
+    const scrollNodes = scrollIds.size
+      ? describeNodes(allNodes).filter((node) => scrollIds.has(node.id))
+      : [];
     const evidenceNodes = new Map<string, UINode>();
-    for (const node of nativeNodes) {
+    for (const node of [...nativeNodes, ...scrollNodes]) {
       for (const id of [
         ...(node.semantic?.name_node_ids ?? []),
         ...(node.semantic?.context?.name_node_ids ?? []),
@@ -451,6 +458,7 @@ export class PhoneService {
     s.observations.set(observation.id, {
       observation,
       nativeNodes,
+      scrollNodes,
       evidenceNodes,
       created: this.now(),
       source,
@@ -767,7 +775,9 @@ export class PhoneService {
       );
     if (action.kind === 'scroll_node') {
       requireCapability(c.swipe, 'scrolling');
-      const target = old.nativeNodes.find((n) => n.id === action.node_id);
+      const target =
+        old.nativeNodes.find((n) => n.id === action.node_id) ??
+        old.scrollNodes.find((n) => n.id === action.node_id);
       if (!target?.enabled || !(target.scrollable || target.semantic?.role === 'scroll'))
         throw new PhoneError(
           'NODE_NOT_SCROLLABLE',

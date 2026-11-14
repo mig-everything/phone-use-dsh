@@ -4,20 +4,38 @@ This record separates automated protocol checks, official-host integration and d
 
 ## Public 0.9.4 release
 
-The first public release derives from the 0.9.3 implementation and introduces distribution metadata, explicit supported DSH prerelease ranges, public installation instructions and package validation. Device action semantics remain shared by SDK, MCP and DSH.
+The first public release derives from the 0.9.3 implementation and introduces distribution metadata, explicit supported DSH prerelease ranges, public installation instructions and package validation. Device action semantics remain shared by SDK, MCP and DSH. Release acceptance also found and fixed a shared-core bug: scroll regions advertised in navigation could be rejected after a small node budget or query omitted them from the control index. Advertised regions now retain native evidence separately; this does not authorize taps or text into omitted controls.
 
 Checks on November 14, 2026, on macOS / Apple Silicon:
 
-- Full regression: **146 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests.
+- Full regression: **147 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (76.9 seconds for the final run).
 - Formatting, TypeScript build and bundled native artifact checks passed.
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
 - DSH Desktop displayed the installed **0.9.4** component running. An isolated Android emulator connected through the device picker; H.264 preview and native input readiness were visible, and a tap dismissed a system dialog.
 - The installed 0.9.4 core separately exercised continuous Android `down/move/up` input at 1080×2340 with a 944×2048 scrcpy stream. A fresh screenshot confirmed that the notification shade opened. This validates that device path and coordinate mapping, not the desktop mouse event path. The test session and emulator were released afterward.
 
-The desktop drag check is **not signed off**: the cold-booted emulator showed Launcher/System UI ANRs, a fallback gesture reported about 6.2 seconds of queue time, and desktop automation repeatedly returned `noWindowsAvailable`. These observations do not establish smooth dragging or a fixed frame rate. Protocol/browser input regressions passed separately. Do not interpret those tests as a desktop performance measurement.
+The desktop drag check is **not signed off**: the initial Android 17 cold boot showed Launcher/System UI ANRs under severe host memory pressure. A later desktop attempt confirmed the updated 0.9.4 source and running component after disable/re-enable, but desktop automation continued returning `noWindowsAvailable` and inconsistent window observations. The device-backed browser integration checks below verify the shipped sidebar and DSH Fetch transport separately. They are not measurements of desktop end-to-end latency or a guaranteed frame rate.
 
-CI runs the Linux full suite plus macOS/Windows portability checks on Node.js 22. See the [public CI results](https://github.com/mig-everything/phone-use-dsh/actions).
+### Release acceptance on isolated devices
+
+The installed 0.9.4 archive was exercised through a real stdio MCP client, without model/image mocks. Tests used dedicated devices and released their leases afterward. Other occupied devices were left untouched. After an initial disk-space and memory-pressure failure, platform checks ran sequentially.
+
+| Platform | Observed acceptance results |
+| --- | --- |
+| HarmonyOS 6.1.1 / API 24 | Unlock; launch Settings; native Battery navigation; cancel a login dialog; switch to Contacts; enter Chinese/English text in a draft; recognize its screenshot with bundled OCR; discard the draft; Home; scroll the About page. |
+| Android 15 / API 35 | Launch Settings; focus search; enter `battery`; open the matching Battery page; return; scroll search results; stable screenshot and bundled OCR; Home. The compact-navigation regression was reproduced before the fix and passed on the updated installed archive with `max_nodes: 1` and a query. |
+| iOS 27 / iPhone 16 Pro simulator | Launch Settings; focus search and enter Chinese text; close search; navigate General → About; scroll using a navigation-only region after a fresh compact inspection; stable screenshot and bundled OCR; Home; relaunch and navigate back. Screenshot pixels (1206×2622) and input points (402×874) remained aligned. |
+
+The device-backed sidebar test mounts the shipped DSH Fetch routes in an isolated browser integration host. It waits for client input readiness, sends real mouse down/move/up, verifies that down and move reach the native channel **before** mouseup, and compares the resulting page. HarmonyOS used the bundled UiTest JPEG stream (1056×2288, 1080×2340 input); Android used H.264 (944×2048, 1080×2340 input); iOS used H.264 (1206×2622, 402×874 input). All three scrolled Settings successfully without native-channel errors. Sample server-side down submission took 463 ms on HarmonyOS, 42 ms on Android and 152 ms on iOS; these include validation and are not glass-to-glass latency measurements. HarmonyOS's default UiTest channel is not H.264. The iOS panel briefly reported 52.9 FPS; this is a sample, not a sustained benchmark.
+
+An initial browser test sent a drag before explicitly awaiting client input readiness and recorded no native pointer events. The fixture was corrected to finish its own inspection and await readiness before starting a new gesture; subsequent checks passed. Failed or uncertain submitted actions were not automatically replayed.
+
+Three real captured screenshots (one per platform) were also recognized concurrently by the installed bundle's cold portable OCR workers. All three returned `ok` within the default 2500 ms deadline: HarmonyOS 614 ms, Android 865 ms and iOS 787 ms, with total wall time 866 ms and peak concurrency 3. Expected Chinese/English page text was checked. This validates OCR concurrency independently of device acquisition; it is not a simultaneous three-emulator action test.
+
+The cold iOS Springboard tree request hit WDA's 15-second deadline; a screenshot succeeded and subsequent Settings trees/actions passed. One iOS scroll attempt after a page transition correctly returned `STALE_NODE`; a fresh inspection was required. HarmonyOS screenshot settling reached its deadline when a capture itself was slow, and returned that status instead of claiming animation completion. These limits remain visible to callers.
+
+The CI workflow is configured for the Linux full suite plus macOS/Windows portability checks on Node.js 22. Local checks do not establish a remote CI result; consult [public CI](https://github.com/mig-everything/phone-use-dsh/actions) after the source is pushed.
 
 ## Automated coverage
 
