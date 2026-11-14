@@ -8,14 +8,24 @@ The first public release derives from the 0.9.3 implementation and introduces di
 
 Checks on November 14, 2026, on macOS / Apple Silicon:
 
-- Full regression: **147 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (76.9 seconds for the final run).
+- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (79.7 seconds for the final run).
 - Formatting, TypeScript build and bundled native artifact checks passed.
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
 - DSH Desktop displayed the installed **0.9.4** component running. An isolated Android emulator connected through the device picker; H.264 preview and native input readiness were visible, and a tap dismissed a system dialog.
 - The installed 0.9.4 core separately exercised continuous Android `down/move/up` input at 1080×2340 with a 944×2048 scrcpy stream. A fresh screenshot confirmed that the notification shade opened. This validates that device path and coordinate mapping, not the desktop mouse event path. The test session and emulator were released afterward.
 
-The desktop drag check is **not signed off**: the initial Android 17 cold boot showed Launcher/System UI ANRs under severe host memory pressure. A later desktop attempt confirmed the updated 0.9.4 source and running component after disable/re-enable, but desktop automation continued returning `noWindowsAvailable` and inconsistent window observations. The device-backed browser integration checks below verify the shipped sidebar and DSH Fetch transport separately. They are not measurements of desktop end-to-end latency or a guaranteed frame rate.
+An initial Android 17 cold boot showed Launcher/System UI ANRs under severe host memory pressure. Desktop automation also intermittently returned `noWindowsAvailable`. Later testing used the isolated Android 15 emulator. After the fixes below, the installed desktop component successfully dragged the Settings list from its upper to lower entries. Its input diagnostics reported 37 ms for down and 2 ms for the latest move. These are control round trips, not glass-to-glass latency. The user had reported visible lag before these fixes; a subjective desktop retest is still pending, so that performance acceptance is not signed off.
+
+### Desktop interaction fixes
+
+- Fast drags retain their final move before release even if the down acknowledgement arrives after mouseup. Cancellation does not add a move, and uncertain input is not replayed.
+- DSH frame acknowledgements use a separate bounded, batched feedback route. Device controls retain their own strict order. A negotiated window permits at most four unacknowledged batches per device; unknown or duplicate acknowledgements do not grant credit. Slow consumers still stop rather than accumulate an unbounded video backlog.
+- Static H.264 views renew their visible input evidence from the healthy current stream after ten seconds. Original capture times and the agent's 30-second observation expiry remain unchanged.
+- HTTP errors preserve structured `PANEL_CLOSED` and uncertain-action information. A sidebar can recover its expired panel after plugin reload without creating another iframe or replaying input.
+- A faster status poll no longer discards a pending discovery result. A deterministic browser regression reproduced the empty picker before the fix and passed afterward.
+
+A transport-only benchmark with an artificial 80 ms acknowledgement delay increased from 12.5 to 49 batches/second with the bounded window. This is not a desktop FPS claim. The installed bundle passed continuous native drag and a rapid reverse drag after 35 seconds of idle preview on Android and HarmonyOS. Page observations confirmed the list moved in both directions. Browser integration input round trips for the rapid gesture were 50/1 ms (down/move) on Android and 128/22 ms on HarmonyOS. HarmonyOS used UiTest JPEG; Android used H.264. Host load, capture cadence and rendering remain separate factors.
 
 ### Release acceptance on isolated devices
 

@@ -10,6 +10,7 @@ export class FetchPreviewSocket extends EventEmitter implements PreviewSocket {
   private controller!: ReadableStreamDefaultController<Uint8Array>;
   private ended = false;
   private sequence = 0;
+  private feedbackSequence = 0;
   constructor(signal: AbortSignal) {
     super();
     this.body = new ReadableStream<Uint8Array>(
@@ -52,6 +53,25 @@ export class FetchPreviewSocket extends EventEmitter implements PreviewSocket {
       throw new Error('Closed or out-of-order preview input; input was not replayed.');
     this.sequence = sequence;
     this.emit('message', Buffer.from(message), false);
+  }
+  receiveFeedback(sequence: number, acks: { session_id: string; observation_id: string }[]) {
+    if (this.ended || sequence !== this.feedbackSequence + 1 || !acks.length || acks.length > 32)
+      throw new Error('Closed or out-of-order preview feedback.');
+    this.feedbackSequence = sequence;
+    // This lane only acknowledges received frames. Device input always uses
+    // the independently ordered control lane and its normal validation.
+    for (const ack of acks)
+      this.emit(
+        'message',
+        Buffer.from(
+          JSON.stringify({
+            type: 'ack',
+            session_id: ack.session_id,
+            observation_id: ack.observation_id,
+          }),
+        ),
+        false,
+      );
   }
   close() {
     if (this.ended) return;

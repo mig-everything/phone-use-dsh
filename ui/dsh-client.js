@@ -155,7 +155,20 @@ window.__ModuleLoader__.load({
           if (response.status === 404)
             throw new Error('Phone Use 服务正在重新加载，请稍后重新打开看板。');
           const data = await response.json();
-          if (!response.ok) throw new Error(data.error?.message ?? 'Phone Use connection failed.');
+          // Keep the shared error contract: the widget can renew an expired
+          // panel on PANEL_CLOSED and must retain uncertain action outcomes.
+          if (!response.ok)
+            return {
+              isError: true,
+              content: [],
+              structuredContent: {
+                error: data.error ?? {
+                  code: 'HOST_ERROR',
+                  message: 'Phone Use connection failed.',
+                  uncertain: true,
+                },
+              },
+            };
           return data;
         };
         const notify = (method, params) =>

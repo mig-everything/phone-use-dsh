@@ -53,6 +53,7 @@ const messageSchema = z.discriminatedUnion('type', [
       sessions: z.array(z.string().uuid()).max(8),
       quality: z.enum(['focus', 'grid']),
       video: z.boolean().optional(),
+      frame_window: z.number().int().min(1).max(4).optional(),
       // Per-device decoder negotiation. Older clients retain the boolean default.
       video_sessions: z.array(z.string().uuid()).max(8).optional(),
       video_failures: z
@@ -195,7 +196,11 @@ export class PanelStream {
   }
   /** An authenticated host supplies the carrier; tickets still bind a single panel. */
   hostTicket(panelId: string) {
-    return { ...this.issueTicket(panelId), transport: 'host' as const };
+    return {
+      ...this.issueTicket(panelId),
+      transport: 'host' as const,
+      features: ['per-device-video', 'frame-window', 'frame-feedback'],
+    };
   }
   attachHost(socket: PreviewSocket) {
     if (this.closed || this.hostSockets.size >= 16)
@@ -225,14 +230,22 @@ export class PanelStream {
       quality: 'focus' | 'grid' = 'focus',
       lastActionId = -1;
     let nativeVideo = false;
+    let frameWindow = 1;
     const videoSessions = new Set<string>();
     const videoCursors = new Map<string, number>();
     const videoReady = new Map<string, boolean>();
     const videoActivity = new Map<string, number>();
+    const videoUpdated = new Map<string, number>();
     const selected = new Set<string>(),
       working = new Set<string>(),
       actions = new Set<string>();
-    const sent = new Map<string, { id: string; at: number }>();
+    const sent = new Map<string, { id: string; at: number }[]>();
+    const outstanding = (id: string) => sent.get(id)?.length ?? 0;
+    const markSent = (id: string, observation: string) => {
+      const pending = sent.get(id) ?? [];
+      pending.push({ id: observation, at: Date.now() });
+      sent.set(id, pending);
+    };
     const last = new Map<string, string>(),
       next = new Map<string, number>();
     const send = (data: unknown) => {
@@ -240,8 +253,8 @@ export class PanelStream {
     };
     const authTimer = setTimeout(() => ws.close(1008, 'Authentication required'), 3000);
     authTimer.unref();
-    // Wake on consumer acknowledgement instead of waiting for the next global
-    // polling tick. Keep one outstanding batch per device, with no frame backlog.
+    // Legacy clients keep one in-flight batch. A host can negotiate a bounded
+    // window so each frame does not wait for a desktop IPC round trip.
     const wakeups = new Map<string, ReturnType<typeof setTimeout>>();
     const schedule = (sessionId: string) => {
       if (!selected.has(sessionId) || ws.readyState !== WebSocket.OPEN) return;
@@ -263,7 +276,7 @@ export class PanelStream {
         Date.now() > visibleUntil ||
         ws.readyState !== WebSocket.OPEN ||
         !selected.has(sessionId) ||
-        sent.has(sessionId) ||
+        outstanding(sessionId) >= frameWindow ||
         working.has(sessionId)
       )
         return;
@@ -289,8 +302,12 @@ export class PanelStream {
           native &&
           !native.video.packets.length &&
           native.observation.input_ready &&
-          videoReady.get(sessionId) === false
+          (videoReady.get(sessionId) === false ||
+            Date.now() - (videoUpdated.get(sessionId) ?? 0) >= 10_000)
         )
+          // Healthy change-driven video may stay static longer than the input
+          // observation lifetime. Renew the visible view with its current GOP;
+          // agent observations retain their original expiry and capture time.
           native = await this.service.videoPreview(sessionId, 0);
         if (native) {
           const { video, observation } = native;
@@ -320,10 +337,11 @@ export class PanelStream {
           );
           const length = Buffer.alloc(4);
           length.writeUInt32BE(metadata.length);
-          sent.set(sessionId, { id: observation.id, at: Date.now() });
+          markSent(sessionId, observation.id);
           videoCursors.set(sessionId, packets.at(-1)!.sequence);
           videoReady.set(sessionId, observation.input_ready !== false);
           videoActivity.set(sessionId, this.service.state(sessionId).activity?.id ?? 0);
+          videoUpdated.set(sessionId, Date.now());
           ws.send(Buffer.concat([length, metadata, ...packets.map((p) => p.bytes)]));
           return;
         }
@@ -347,9 +365,7 @@ export class PanelStream {
         );
         const length = Buffer.alloc(4);
         length.writeUInt32BE(metadata.length);
-        // At most one unacknowledged frame/device. Slow renders drop intermediate
-        // frames rather than buffering seconds of obsolete video.
-        sent.set(sessionId, { id: frame.observation.id, at: Date.now() });
+        markSent(sessionId, frame.observation.id);
         last.set(sessionId, frame.observation.id);
         ws.send(Buffer.concat([length, metadata, bytes]));
       } catch (error) {
@@ -364,12 +380,12 @@ export class PanelStream {
             started + (videoSessions.has(sessionId) ? (quality === 'focus' ? 16 : 33) : 33),
           ),
         );
-        if (!sent.has(sessionId)) schedule(sessionId);
+        if (outstanding(sessionId) < frameWindow) schedule(sessionId);
       }
     };
     const status = setInterval(() => {
       if (!panelId || Date.now() > visibleUntil) return;
-      if ([...sent.values()].some((item) => Date.now() - item.at > 5000)) {
+      if ([...sent.values()].some((items) => items.some((item) => Date.now() - item.at > 5000))) {
         ws.close(1013, 'Frame consumer stalled');
         return;
       }
@@ -409,10 +425,12 @@ export class PanelStream {
               sent.delete(id);
               last.delete(id);
               videoCursors.delete(id);
+              videoUpdated.delete(id);
             }
           selected.clear();
           for (const id of requested) selected.add(id);
           quality = message.quality;
+          frameWindow = message.frame_window ?? 1;
           nativeVideo = Boolean(message.video);
           const requestedVideo = new Set(
             message.video_sessions ?? (nativeVideo ? [...requested] : []),
@@ -431,8 +449,11 @@ export class PanelStream {
           visibleUntil = Date.now() + 5000;
           for (const id of selected) schedule(id);
         } else if (message.type === 'ack') {
-          if (sent.get(message.session_id)?.id === message.observation_id) {
-            sent.delete(message.session_id);
+          const pending = sent.get(message.session_id);
+          const index = pending?.findIndex((item) => item.id === message.observation_id) ?? -1;
+          if (pending && index >= 0) {
+            pending.splice(index, 1);
+            if (!pending.length) sent.delete(message.session_id);
             schedule(message.session_id);
           }
         } else if (message.type === 'pointer') {

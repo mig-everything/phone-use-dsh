@@ -1,5 +1,5 @@
 /* Authenticated host Fetch carrier. Frames never pass through a model tool result. */
-function phoneUseHostStream(session) {
+function phoneUseHostStream(session, options = {}) {
   const controller = new AbortController();
   const fetchHost = (...args) => window.parent.fetch(...args);
   const endpoint = (name) => `/api/phone-use/${name}?session=${encodeURIComponent(session)}`;
@@ -8,6 +8,31 @@ function phoneUseHostStream(session) {
     sequence = 0,
     sending = Promise.resolve(),
     pendingBytes = 0;
+  let feedbackSequence = 0,
+    sendingFeedback = false;
+  const feedback = [];
+  const flushFeedback = async () => {
+    if (sendingFeedback) return;
+    sendingFeedback = true;
+    try {
+      while (feedback.length && socket.readyState === 1) {
+        const batch = feedback.splice(0, 32);
+        const response = await fetchHost(endpoint('feedback'), {
+          method: 'POST',
+          credentials: 'same-origin',
+          signal: controller.signal,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ channel, sequence: ++feedbackSequence, acks: batch }),
+        });
+        if (!response.ok) throw new Error('Preview feedback was not accepted.');
+      }
+    } catch (error) {
+      socket.onerror?.(error);
+      socket.close();
+    } finally {
+      sendingFeedback = false;
+    }
+  };
   const socket = {
     readyState: 0,
     binaryType: 'arraybuffer',
@@ -21,6 +46,20 @@ function phoneUseHostStream(session) {
     send(message) {
       if (socket.readyState !== 1 || typeof message !== 'string' || message.length > 65536)
         return socket.close();
+      if (options.feedback) {
+        let value;
+        try {
+          value = JSON.parse(message);
+        } catch {
+          return socket.close();
+        }
+        if (value.type === 'ack') {
+          if (feedback.length >= 128) return socket.close();
+          feedback.push({ session_id: value.session_id, observation_id: value.observation_id });
+          void flushFeedback();
+          return;
+        }
+      }
       const number = ++sequence;
       pendingBytes += message.length;
       if (pendingBytes > 128 * 1024) return socket.close();
@@ -47,6 +86,7 @@ function phoneUseHostStream(session) {
     close() {
       if (socket.readyState === 3) return;
       socket.readyState = 3;
+      feedback.length = 0;
       controller.abort();
       void reader?.cancel().catch(() => {});
       if (channel)

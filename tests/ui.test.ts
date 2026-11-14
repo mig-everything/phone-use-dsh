@@ -95,6 +95,8 @@ for (const mode of [
       const html = await widgetHtml();
       let initializations = 0,
         modelContextUpdates = 0;
+      let releaseDiscovery: (() => void) | undefined,
+        discoveryOvertaken = false;
       const host = createServer(async (req, res) => {
         try {
           if (req.url === '/widget') {
@@ -116,7 +118,11 @@ for (const mode of [
           }
           if (req.url === '/initial') {
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(await call('phone_console')));
+            const initial = await call('phone_console');
+            // A phone attached after the initial dashboard must remain discoverable
+            // even when a later, faster status poll overtakes device discovery.
+            if (mode === 'fallback') (initial.structuredContent as any).panel.devices = [];
+            res.end(JSON.stringify(initial));
             return;
           }
           if (req.url === '/rpc') {
@@ -162,6 +168,19 @@ for (const mode of [
                 );
               else {
                 const result = await client.callTool(message.params);
+                if (mode === 'fallback' && message.params.name === 'phone_panel') {
+                  if (message.params.arguments?.discover && !discoveryOvertaken)
+                    await new Promise<void>((resolve) => {
+                      releaseDiscovery = resolve;
+                    });
+                  else if (message.params.arguments?.discover === false && releaseDiscovery) {
+                    discoveryOvertaken = true;
+                    const release = releaseDiscovery;
+                    releaseDiscovery = undefined;
+                    // Deliver the newer status response to the widget first.
+                    setTimeout(release, 100);
+                  }
+                }
                 if (mode === 'rtc-timeout' && message.params.arguments?.rtc_offer) {
                   const stream = result._meta!.stream as any;
                   // Valid loopback SDP, but deliberately no listener at the candidate port.
@@ -239,7 +258,14 @@ for (const mode of [
         await firstScreen.waitFor({ state: 'visible' });
         if (native) await first.locator('canvas.screen').waitFor({ state: 'visible' });
         await ui.locator('#add').click();
-        await ui.locator('.device-option[data-device-id="demo:phone-2"] button').click();
+        try {
+          await ui.locator('.device-option[data-device-id="demo:phone-2"] button').click();
+        } catch (error) {
+          throw new Error(
+            `${error}\nPicker: ${await ui.locator('#picker').evaluate((el) => el.outerHTML)}\nStatus: ${await ui.locator('#status').textContent()}\nBrowser: ${errors.join('; ')}`,
+          );
+        }
+        if (mode === 'fallback') assert(discoveryOvertaken);
         const second = ui.locator('[data-device-id="demo:phone-2"].card'),
           secondScreen = second.locator('.screen:not([hidden])');
         await secondScreen.waitFor({ state: 'visible' });

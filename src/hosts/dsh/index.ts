@@ -244,6 +244,33 @@ export function mountDsh(ctx: any, service: PhoneService) {
       channel.socket.receive(input.sequence, input.message);
       return Response.json({ accepted: true });
     });
+    route('feedback', ['POST'], async (request, context) => {
+      const text = await request.text();
+      if (text.length > 8192) throw new PhoneError('INVALID_REQUEST', 'Feedback exceeds 8 KiB.');
+      const input = z
+        .object({
+          channel: z.string().uuid(),
+          sequence: z.number().int().positive(),
+          acks: z
+            .array(
+              z
+                .object({
+                  session_id: z.string().uuid(),
+                  observation_id: z.string().uuid(),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(32),
+        })
+        .strict()
+        .parse(JSON.parse(text));
+      const channel = channels.get(input.channel);
+      if (!channel || channel.scope !== context.scope)
+        throw new PhoneError('SESSION_CLOSED', 'Preview channel is closed.');
+      channel.socket.receiveFeedback(input.sequence, input.acks);
+      return Response.json({ accepted: true });
+    });
     route('disconnect', ['POST'], async (request, context) => {
       const text = await request.text();
       if (text.length > 100) throw new PhoneError('INVALID_REQUEST', 'Invalid connection.');

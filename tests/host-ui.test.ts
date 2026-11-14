@@ -28,6 +28,7 @@ test(
     }
     class Native extends DemoAdapter {
       calls: DriverAction[] = [];
+      downDelay = 0;
       pointerReady() {
         return true;
       }
@@ -36,6 +37,8 @@ test(
       }
       override async execute(_d: Device, action: DriverAction) {
         this.calls.push(action);
+        if (action.kind === 'pointer' && action.phase === 'down' && this.downDelay)
+          await new Promise((resolve) => setTimeout(resolve, this.downDelay));
       }
     }
     const dir = await mkdtemp(join(tmpdir(), 'phone-use-host-ui-')),
@@ -67,7 +70,11 @@ test(
           res.end(`<iframe title="Phone Use" style="width:100%;height:96vh;border:0" src="/api/phone-use/widget?session=ui"></iframe>
 <script>
 const frame = document.querySelector('iframe');
-const call = async (name, args={}) => (await fetch('/api/phone-use/tools?session=ui', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,arguments:args})})).json();
+const call = async (name, args={}) => {
+ const response = await fetch('/api/phone-use/tools?session=ui', {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name,arguments:args})});
+ const data = await response.json();
+ return response.ok ? data : {isError:true,content:[],structuredContent:{error:data.error}};
+};
 window.addEventListener('message', async event => {
  if(event.source!==frame.contentWindow) return;
  const m=event.data; let result={};
@@ -188,6 +195,54 @@ window.addEventListener('message', async event => {
       assert(adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'cancel'));
       assert(!adapter.calls.some((a) => a.kind === 'swipe'));
       await page.mouse.up();
+      // Expire only the view identity. The mounted iframe must reacquire it
+      // without opening another panel or replaying any device input.
+      const previousPanel = service.panel('dsh:ui');
+      for (let i = 0; i < 129; i++) service.panel(`expired-view-${i}`);
+      assert.throws(() => service.panelScope(previousPanel), { code: 'PANEL_CLOSED' });
+      const inputCount = adapter.calls.length;
+      const renewed = page.waitForResponse((response) => {
+        if (!response.url().includes('/api/phone-use/tools?') || !response.ok()) return false;
+        const request = response.request().postDataJSON();
+        return request?.name === 'phone_panel' && !request.arguments?.panel_id;
+      });
+      await page.evaluate(() =>
+        document.querySelector('iframe')!.contentWindow!.postMessage(
+          {
+            jsonrpc: '2.0',
+            method: 'ui/notifications/host-context-changed',
+            params: { visible: true },
+          },
+          location.origin,
+        ),
+      );
+      await frame.getByRole('button', { name: '添加设备', exact: true }).click();
+      await renewed;
+      await frame.getByRole('button', { name: '重新发现', exact: true }).waitFor();
+      await frame.locator('#connection-status').filter({ hasText: '宿主直连' }).waitFor();
+      assert.notEqual(service.panel('dsh:ui'), previousPanel);
+      assert.equal(await page.locator('iframe').count(), 1);
+      assert.equal(adapter.calls.length, inputCount, 'recovering a view never replays input');
+      await frame.getByRole('button', { name: '关闭设备列表', exact: true }).click();
+      await frame.locator('.stage[data-busy="false"]').waitFor();
+      adapter.calls.length = 0;
+      adapter.downDelay = 600;
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
+      await page.mouse.down();
+      await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'down'));
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
+      await page.mouse.up();
+      await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'up'));
+      assert.deepEqual(
+        adapter.calls.map((a) => (a.kind === 'pointer' ? a.phase : a.kind)),
+        ['down', 'move', 'up'],
+        'a completed drag retains its movement even when down acknowledgement is delayed',
+      );
+      const moved = adapter.calls[1],
+        released = adapter.calls[2];
+      assert(moved?.kind === 'pointer' && released?.kind === 'pointer');
+      assert.equal(moved.x, released.x);
+      assert.equal(moved.y, released.y);
     } finally {
       await browser.close();
       cleanup.forEach((fn) => fn());

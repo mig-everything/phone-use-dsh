@@ -12,6 +12,71 @@ import { Fleet } from './fleet.js';
 import type { Device } from '../src/core/types.js';
 import { previewCertificate } from './tls.js';
 
+test('negotiated frame windows remove per-frame round trips while retaining a hard bound', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'phone-use-frame-window-'));
+  class VideoFleet extends Fleet {
+    sequence = 0;
+    encodedVideo() {
+      const sequence = ++this.sequence;
+      return {
+        codec: 'avc1.42c01e',
+        width: 360,
+        height: 720,
+        epoch: 1,
+        capturedAt: new Date().toISOString(),
+        reset: false,
+        packets: [{ sequence, timestamp: sequence * 16667, key: true, bytes: Buffer.from([1]) }],
+      };
+    }
+  }
+  const service = new PhoneService([new VideoFleet(1)], dir);
+  let ws: WebSocket | undefined;
+  try {
+    const { session_id } = await service.open('demo:phone-1');
+    const ticket = await panelStream(service).ticket(service.panel());
+    ws = new WebSocket(ticket.url);
+    const frames: any[] = [];
+    ws.on('message', (raw, binary) => {
+      if (binary) {
+        const bytes = raw as Buffer;
+        frames.push(JSON.parse(bytes.subarray(4, 4 + bytes.readUInt32BE(0)).toString()));
+      }
+    });
+    await once(ws, 'open');
+    const ready = once(ws, 'message');
+    ws.send(JSON.stringify({ type: 'hello', token: ticket.token }));
+    await ready;
+    const send = (value: unknown) => ws!.send(JSON.stringify(value));
+    send({ type: 'view', sessions: [session_id], quality: 'focus', video: true, frame_window: 4 });
+    const until = async (count: number) => {
+      const deadline = Date.now() + 3000;
+      while (frames.length < count && Date.now() < deadline) await delay(10);
+      assert.equal(frames.length, count);
+    };
+    await until(4);
+    await delay(150);
+    assert.equal(frames.length, 4, 'an unresponsive consumer cannot grow a frame backlog');
+    send({
+      type: 'ack',
+      session_id,
+      observation_id: ticket.token.slice(0, 8) + '-0000-4000-8000-000000000000',
+    });
+    await delay(80);
+    assert.equal(frames.length, 4, 'unknown acknowledgements do not grant credit');
+    send({ type: 'ack', session_id, observation_id: frames[2].observation.id });
+    await until(5);
+    send({ type: 'ack', session_id, observation_id: frames[2].observation.id });
+    await delay(80);
+    assert.equal(frames.length, 5, 'duplicate acknowledgements do not grant credit');
+    send({ type: 'ack', session_id, observation_id: frames[0].observation.id });
+    await until(6);
+  } finally {
+    ws?.terminate();
+    await service.shutdown();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('encrypted preview validates TLS and retains single-use authentication and loopback host checks', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'phone-use-stream-tls-'));
   const tls = await previewCertificate(dir);
@@ -58,9 +123,9 @@ test('invalid TLS configuration never silently exposes a plaintext listener', as
 });
 
 test(
-  'static native video renews input after external agent actions without creating another panel',
+  'static native video renews idle preview input and external actions without extending agent observations',
   { timeout: 10000 },
-  async () => {
+  async (t) => {
     const dir = await mkdtemp(join(tmpdir(), 'phone-use-static-video-'));
     class NativeFleet extends Fleet {
       async inputDisplay(device: Device) {
@@ -79,7 +144,7 @@ test(
       }
     }
     const fleet = new NativeFleet(1),
-      service = new PhoneService([fleet], dir),
+      service = new PhoneService([fleet], dir, () => Date.now()),
       stream = panelStream(service);
     let ws: WebSocket | undefined;
     try {
@@ -88,9 +153,9 @@ test(
       ws = new WebSocket(ticket.url);
       const frames: any[] = [];
       const until = async (check: () => boolean) => {
-        const end = Date.now() + 5000;
+        const end = performance.now() + 5000;
         while (!check()) {
-          if (Date.now() > end) throw new Error('Native refresh timed out');
+          if (performance.now() > end) throw new Error('Native refresh timed out');
           await delay(10);
         }
       };
@@ -109,16 +174,46 @@ test(
       ws.send(JSON.stringify({ type: 'hello', token: ticket.token }));
       await until(() => frames.length === 1);
       const old = frames[0].observation.id;
-      await service.act(id, { kind: 'key', key: 'home' }, false);
+      const agent = await service.observe(id, false, 0, 0, 'off');
+      t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+      t.mock.timers.setTime(Date.now() + 35_000);
+      ws.send(JSON.stringify({ type: 'view', sessions: [id], quality: 'focus', video: true }));
       await until(() => frames.length === 2);
       assert.notEqual(frames[1].observation.id, old);
-      assert.equal(frames[1].observation.input_ready, true);
+      await assert.rejects(
+        service.act(
+          id,
+          {
+            kind: 'tap',
+            x: 1,
+            y: 1,
+            observation_id: agent.observation.id,
+          },
+          false,
+        ),
+        { code: 'STALE_OBSERVATION' },
+      );
       await service.act(
         id,
-        { kind: 'tap', x: 1, y: 1, observation_id: frames[1].observation.id },
+        {
+          kind: 'tap',
+          x: 1,
+          y: 1,
+          observation_id: frames[1].observation.id,
+        },
         false,
       );
-      assert.equal(fleet.calls.length, 2);
+      await until(() => frames.length === 3);
+      await service.act(id, { kind: 'key', key: 'home' }, false);
+      await until(() => frames.length === 4);
+      assert.notEqual(frames[3].observation.id, old);
+      assert.equal(frames[3].observation.input_ready, true);
+      await service.act(
+        id,
+        { kind: 'tap', x: 1, y: 1, observation_id: frames[3].observation.id },
+        false,
+      );
+      assert.equal(fleet.calls.length, 3);
     } finally {
       ws?.terminate();
       await service.shutdown();

@@ -271,7 +271,7 @@ export class PhoneService {
   panelScope(id: string) {
     const scope = this.panels.get(id);
     if (scope === undefined)
-      throw new PhoneError('PANEL_CLOSED', 'Reopen phone_screen to reconnect this panel.');
+      throw new PhoneError('PANEL_CLOSED', 'Reopen phone_console to reconnect this panel.');
     return scope;
   }
   select(scope: string, sessionId: string) {

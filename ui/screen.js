@@ -54,6 +54,7 @@
   let liveSocket,
     liveReady = false,
     livePerDeviceVideo = false,
+    liveFrameWindow = 1,
     liveConnecting = false,
     nextLive = 0,
     nextRtc = 0,
@@ -168,6 +169,7 @@
         type: 'view',
         sessions,
         quality: mode,
+        ...(liveFrameWindow > 1 ? { frame_window: liveFrameWindow } : {}),
         video:
           nativeVideo &&
           (livePerDeviceVideo || !sessions.some((id) => entries.get(id).videoFailure)),
@@ -199,6 +201,7 @@
   }
   function livePointer(e, phase, point, observation_id) {
     const id = nextId++;
+    const started = performance.now();
     return new Promise((resolve, reject) => {
       if (!liveReady || liveSocket?.readyState !== WebSocket.OPEN)
         return reject(new Error('原生操作通道已断开'));
@@ -219,7 +222,12 @@
           ...(observation_id ? { observation_id } : {}),
         }),
       );
-    }).then(checked);
+    })
+      .then(checked)
+      .finally(() => {
+        e.pointerTiming ??= {};
+        e.pointerTiming[phase] = Math.round(performance.now() - started);
+      });
   }
   async function flushPointer(e) {
     const p = e.directPointer;
@@ -231,8 +239,13 @@
         await livePointer(e, 'down', p, p.observation_id);
       }
       while (p.next || p.end) {
-        const phase = p.end ?? 'move',
-          point = p.next ?? p.last ?? p;
+        const point = p.next ?? p.last ?? p;
+        const previous = p.last ?? p;
+        // A quick drag may finish while down is still awaiting acknowledgement.
+        // Preserve its final movement before up; otherwise platforms can interpret
+        // the down/up pair as a tap. Cancellation must never add a movement.
+        const finalMove = p.end === 'up' && (point.x !== previous.x || point.y !== previous.y);
+        const phase = finalMove ? 'move' : (p.end ?? 'move');
         p.next = undefined;
         p.last = point;
         await livePointer(e, phase, point);
@@ -359,7 +372,13 @@
       const result = await tool('phone_connect', { panel_id: panelId });
       const config = result._meta?.stream;
       if (config?.transport !== 'host') throw new Error('Host preview unavailable');
-      return { ...phoneUseHostStream(hostCarrier.session), config, transport: 'host' };
+      return {
+        ...phoneUseHostStream(hostCarrier.session, {
+          feedback: config.features?.includes('frame-feedback') === true,
+        }),
+        config,
+        transport: 'host',
+      };
     }
     if (typeof RTCPeerConnection === 'function' && Date.now() >= nextRtc) {
       let rtc;
@@ -436,6 +455,7 @@
         return connectionStatus('invalid-ticket');
       }
       livePerDeviceVideo = config.features?.includes('per-device-video') === true;
+      liveFrameWindow = config.features?.includes('frame-window') === true ? 4 : 1;
       connectionTransport = transport;
       connectionSecure = transport !== 'ws';
       connectionEndpoint = connection.endpoint;
@@ -455,7 +475,7 @@
       ws.onmessage = async (event) => {
         if (ws !== liveSocket || disposed) return;
         if (event.data instanceof ArrayBuffer) {
-          let data;
+          let data, release;
           try {
             const packet = event.data,
               length = new DataView(packet).getUint32(0);
@@ -463,6 +483,21 @@
             data = JSON.parse(new TextDecoder().decode(new Uint8Array(packet, 4, length)));
             const e = entries.get(data.session_id);
             if (!e || e.card.hidden || !e.live || !visible()) return;
+            const previous = e.receiving ?? Promise.resolve();
+            const generationAtReceipt = e.generation;
+            e.receiving = new Promise((resolve) => {
+              release = resolve;
+            });
+            await previous;
+            if (
+              ws !== liveSocket ||
+              e.disposed ||
+              e.generation !== generationAtReceipt ||
+              e.card.hidden ||
+              !e.live ||
+              !visible()
+            )
+              return;
             if (data.mimeType === 'video/h264') {
               await decodeVideo(e, data, new Uint8Array(packet, 4 + length));
               return;
@@ -496,6 +531,7 @@
           } catch {
             // A corrupt packet cannot replace the last valid screen or authorize input.
           } finally {
+            release?.();
             if (data?.observation?.id && ws.readyState === WebSocket.OPEN)
               ws.send(
                 JSON.stringify({
@@ -946,9 +982,13 @@
     e.card.querySelector('[data-control="retry-video"]').hidden =
       !liveReady || !nativeVideo || !reason;
     const t = e.actionTiming;
-    e.card.querySelector('.input-performance').textContent = t
-      ? `操作耗时：排队 ${t.queue} ms · 校验 ${t.prepare} ms · 执行 ${t.execute} ms`
-      : '';
+    const touch = e.pointerTiming;
+    e.card.querySelector('.input-performance').textContent = [
+      t ? `操作耗时：排队 ${t.queue} ms · 校验 ${t.prepare} ms · 执行 ${t.execute} ms` : '',
+      touch ? `触控往返：按下 ${touch.down ?? '—'} ms · 移动 ${touch.move ?? '—'} ms` : '',
+    ]
+      .filter(Boolean)
+      .join(' · ');
     e.card.querySelector('.performance').textContent =
       `${(e.frameStats?.fps ?? 0).toFixed(1)} 帧/秒 · 画面 ${e.image.naturalWidth || e.canvas.width || observation.display.width} × ${e.image.naturalHeight || e.canvas.height || observation.display.height}${e.actionMs ? ` · 操作 ${e.actionMs} ms` : ''}`;
   }
@@ -1266,7 +1306,8 @@
   }
   async function sync(discover = false) {
     if (!panelId || !initialized || disposed) return;
-    // User discovery may overlap a status poll; only apply the latest request's result.
+    // A status poll can overtake slow device discovery. Keep session state
+    // ordered, but do not discard newly discovered devices with that snapshot.
     const sequence = ++syncSequence;
     let result;
     try {
@@ -1279,12 +1320,25 @@
       if (error.code !== 'PANEL_CLOSED') throw error;
       result = await tool('phone_panel', { discover: true });
     }
-    if (sequence < appliedSync || disposed) return;
+    if (disposed) return;
+    const discovered = result.structuredContent?.panel;
+    if (
+      discovered?.panel_id === panelId &&
+      Array.isArray(discovered.devices) &&
+      sequence >= appliedDiscovery
+    ) {
+      appliedDiscovery = sequence;
+      devices = discovered.devices;
+      diagnostics = discovered.diagnostics ?? [];
+      if (!byId('picker').hidden) renderPicker();
+    }
+    if (sequence < appliedSync) return;
     appliedSync = sequence;
     consume(result);
   }
   let syncSequence = 0,
-    appliedSync = 0;
+    appliedSync = 0,
+    appliedDiscovery = 0;
   function canAct(e) {
     return (
       initialized &&

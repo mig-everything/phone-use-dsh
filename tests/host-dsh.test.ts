@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { runInNewContext } from 'node:vm';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -11,6 +12,165 @@ import { PhoneService } from '../src/core/service.js';
 import { DemoAdapter } from '../src/adapters/demo.js';
 import { HarmonyBridge, HarmonyBridgeDecoder, jpegSize } from '../src/transport/harmony-bridge.js';
 import { DeviceShell } from '../src/transport/process.js';
+
+test('DSH frame feedback batches independently and never blocks ordered pointer input', async () => {
+  const requests: { path: string; body: any }[] = [];
+  let releaseFeedback: (() => void) | undefined;
+  const factory = runInNewContext(
+    (await readFile(new URL('../../ui/host-stream.js', import.meta.url), 'utf8')) +
+      '\nphoneUseHostStream;',
+    {
+      AbortController,
+      AbortSignal,
+      Uint8Array,
+      DataView,
+      TextDecoder,
+      window: {
+        parent: {
+          fetch: async (path: string, options: any) => {
+            if (path.includes('/stream?'))
+              return new Response(new ReadableStream(), {
+                headers: {
+                  'content-type': 'application/x-phone-use-stream',
+                  'x-phone-use-channel': 'view',
+                },
+              });
+            requests.push({ path, body: JSON.parse(options.body) });
+            if (path.includes('/feedback?') && !releaseFeedback)
+              await new Promise<void>((resolve) => {
+                releaseFeedback = resolve;
+              });
+            return Response.json({ accepted: true });
+          },
+        },
+      },
+    },
+  );
+  const { socket, start } = factory('conversation', { feedback: true });
+  const opened = new Promise<void>((resolve) => {
+    socket.onopen = resolve;
+  });
+  const running = start();
+  const until = async (check: () => boolean) => {
+    const deadline = Date.now() + 1000;
+    while (!check() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 1));
+    assert(check());
+  };
+  try {
+    await opened;
+    socket.send(JSON.stringify({ type: 'ack', session_id: 'device', observation_id: 'first' }));
+    await until(() => Boolean(releaseFeedback));
+    socket.send(JSON.stringify({ type: 'pointer', phase: 'down', id: 1 }));
+    socket.send(JSON.stringify({ type: 'pointer', phase: 'move', id: 2 }));
+    await until(() => requests.filter((r) => r.path.includes('/input?')).length === 2);
+    const inputs = requests.filter((r) => r.path.includes('/input?'));
+    assert.deepEqual(
+      inputs.map((r) => r.body.sequence),
+      [1, 2],
+    );
+    assert.deepEqual(
+      inputs.map((r) => JSON.parse(r.body.message).phase),
+      ['down', 'move'],
+    );
+    socket.send(JSON.stringify({ type: 'ack', session_id: 'device', observation_id: 'second' }));
+    socket.send(JSON.stringify({ type: 'ack', session_id: 'device', observation_id: 'third' }));
+    releaseFeedback!();
+    await until(() => requests.filter((r) => r.path.includes('/feedback?')).length === 2);
+    const feedback = requests.filter((r) => r.path.includes('/feedback?'));
+    assert.deepEqual(
+      feedback.map((r) => r.body.sequence),
+      [1, 2],
+    );
+    assert.deepEqual(
+      feedback[1]!.body.acks.map((a: any) => a.observation_id),
+      ['second', 'third'],
+    );
+  } finally {
+    releaseFeedback?.();
+    socket.close();
+    await running;
+  }
+});
+
+test('the shipped DSH client preserves expired-panel and uncertain-action errors without replay', async () => {
+  const listeners = new Map<string, (event: any) => Promise<void>>();
+  const effects: (() => () => void)[] = [];
+  const replies: any[] = [];
+  const calls: string[] = [];
+  const frameWindow = { postMessage: (value: unknown) => replies.push(value) };
+  let plugin: any,
+    Panel: any,
+    refs = 0;
+  let status = 400,
+    body: any;
+  const react = {
+    createElement: () => null,
+    useEffect: (fn: () => () => void) => effects.push(fn),
+    useRef: (value: unknown) => ({
+      current: refs++ === 0 ? { contentWindow: frameWindow } : value,
+    }),
+    useState: () => ['', () => {}],
+  };
+  runInNewContext(await readFile(new URL('../../ui/dsh-client.js', import.meta.url), 'utf8'), {
+    AbortController,
+    location: { origin: 'http://fixture' },
+    document: { createElement: () => ({ remove() {} }), head: { append() {} } },
+    window: {
+      __ModuleLoader__: {
+        load: (module: any) => {
+          plugin = module.factory(() => react);
+        },
+      },
+      addEventListener: (name: string, listener: any) => listeners.set(name, listener),
+      removeEventListener: (name: string) => listeners.delete(name),
+    },
+    fetch: async (url: string, options?: any) => {
+      if (url.includes('/widget?')) return new Response('<!doctype html>');
+      calls.push(JSON.parse(options.body).name);
+      return Response.json(body, { status });
+    },
+  });
+  plugin.apply({
+    effect: (fn: () => unknown) => fn(),
+    sidebarRightTabs: { register() {} },
+    slots: {
+      inject: (_name: string, fn: () => void) => fn(),
+      register: (definition: any, component: any) => {
+        if (definition.name === 'sidebar.right.pane.tab') Panel = component;
+      },
+    },
+  });
+  Panel({ sessionId: 'a', expand() {} });
+  const cleanup = effects[0]!();
+  try {
+    for (const [name, error] of [
+      ['phone_panel', { code: 'PANEL_CLOSED', message: 'Panel expired.', uncertain: false }],
+      ['phone_panel_action', { code: 'DEVICE_TIMEOUT', message: 'Check screen.', uncertain: true }],
+    ] as const) {
+      body = { error };
+      await listeners.get('message')!({
+        source: frameWindow,
+        origin: 'http://fixture',
+        data: { jsonrpc: '2.0', id: calls.length + 1, method: 'tools/call', params: { name } },
+      });
+      const reply = JSON.parse(JSON.stringify(replies.at(-1)));
+      assert.equal(reply.result.isError, true);
+      assert.deepEqual(reply.result.structuredContent.error, error);
+      assert(!reply.error, 'structured phone errors must not become message-only RPC errors');
+    }
+    assert.deepEqual(calls, ['phone_panel', 'phone_panel_action'], 'no failed action is replayed');
+    status = 200;
+    body = { content: [], structuredContent: { panel: { panel_id: 'replacement' } } };
+    await listeners.get('message')!({
+      source: frameWindow,
+      origin: 'http://fixture',
+      data: { jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'phone_panel' } },
+    });
+    assert.deepEqual(JSON.parse(JSON.stringify(replies.at(-1).result)), body);
+  } finally {
+    cleanup();
+  }
+});
 
 test('DSH and phone tools remain usable when the optional WebRTC module cannot import', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'phone-dsh-rtc-failure-'));
@@ -194,6 +354,26 @@ test('DSH tools and sidebar share one service, isolate conversations, and preser
     assert.equal((await route('input', hello)).status, 200);
     assert.equal((await readMessage()).type, 'ready');
     assert.equal((await route('input', hello)).status, 400, 'an input sequence must not replay');
+    const feedback = {
+      channel,
+      sequence: 1,
+      acks: [{ session_id: id, observation_id: panel }],
+    };
+    assert.equal((await route('feedback', feedback, 'b')).status, 400);
+    assert.equal((await route('feedback', feedback)).status, 200);
+    assert.equal((await route('feedback', feedback)).status, 400, 'feedback must not replay');
+    assert.equal(
+      (
+        await route('feedback', {
+          ...feedback,
+          sequence: 2,
+          acks: [{ ...feedback.acks[0], type: 'pointer', phase: 'down', x: 0.5, y: 0.5 }],
+        })
+      ).status,
+      400,
+      'feedback cannot become an input bypass',
+    );
+    assert.equal((await route('feedback', { ...feedback, sequence: 2 })).status, 200);
     await reader.cancel();
     const modelInput = await route('tools', {
       name: 'phone_act',
