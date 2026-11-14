@@ -241,6 +241,25 @@
       while (p.next || p.end) {
         const point = p.next ?? p.last ?? p;
         const previous = p.last ?? p;
+        if (p.end === 'up' && !p.last && (point.x !== p.x || point.y !== p.y)) {
+          // A pan recognizer may use its first move only to begin recognition.
+          // Retain the first real sample as well as the latest; a single jump
+          // gets one point on the same segment. This remains a bounded gesture.
+          const first = p.firstMove;
+          const anchor =
+            first && (first.x !== point.x || first.y !== point.y)
+              ? first
+              : { x: (p.x + point.x) / 2, y: (p.y + point.y) / 2 };
+          // A whole buffered gesture submitted within one display interval can
+          // be coalesced into no pan by the OS. Pace only this completed burst;
+          // ongoing moves remain immediate. Recheck cancellation after yielding.
+          await new Promise((resolve) => setTimeout(resolve, 16));
+          if (p.end !== 'up') continue;
+          p.last = anchor;
+          await livePointer(e, 'move', anchor);
+          await new Promise((resolve) => setTimeout(resolve, 16));
+          continue;
+        }
         // A quick drag may finish while down is still awaiting acknowledgement.
         // Preserve its final movement before up; otherwise platforms can interpret
         // the down/up pair as a tap. Cancellation must never add a movement.
@@ -1097,6 +1116,7 @@
       if (!e.directPointer || e.directPointer.end) return;
       const p = point(e, event, e.directPointer.rect);
       if (p) {
+        if (!e.directPointer.last) e.directPointer.firstMove ??= p;
         e.directPointer.next = p;
         void flushPointer(e);
       }

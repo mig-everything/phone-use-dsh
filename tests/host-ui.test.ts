@@ -235,14 +235,48 @@ window.addEventListener('message', async event => {
       await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'up'));
       assert.deepEqual(
         adapter.calls.map((a) => (a.kind === 'pointer' ? a.phase : a.kind)),
-        ['down', 'move', 'up'],
+        ['down', 'move', 'move', 'up'],
         'a completed drag retains its movement even when down acknowledgement is delayed',
       );
-      const moved = adapter.calls[1],
-        released = adapter.calls[2];
+      const anchor = adapter.calls[1],
+        moved = adapter.calls[2],
+        released = adapter.calls[3];
+      assert(anchor?.kind === 'pointer' && moved?.kind === 'pointer');
+      assert.notEqual(anchor.y, moved.y);
       assert(moved?.kind === 'pointer' && released?.kind === 'pointer');
       assert.equal(moved.x, released.x);
       assert.equal(moved.y, released.y);
+      await until(() => !service.state(opened.session_id).busy);
+      const lastFrame = await screen.getAttribute('src');
+      await page.waitForFunction((previous) => {
+        const doc = document.querySelector('iframe')!.contentDocument!;
+        return (
+          doc.querySelector('.stage')?.getAttribute('data-busy') === 'false' &&
+          doc.querySelector('img.screen')?.getAttribute('src') !== previous
+        );
+      }, lastFrame);
+      adapter.calls.length = 0;
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
+      await page.mouse.down();
+      await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'down'));
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
+      await page.mouse.up();
+      await page.evaluate(() =>
+        document.querySelector('iframe')!.contentWindow!.postMessage(
+          {
+            jsonrpc: '2.0',
+            method: 'ui/notifications/host-context-changed',
+            params: { visible: false },
+          },
+          location.origin,
+        ),
+      );
+      await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'cancel'));
+      assert.deepEqual(
+        adapter.calls.map((a) => (a.kind === 'pointer' ? a.phase : a.kind)),
+        ['down', 'cancel'],
+        'hiding during a buffered drag releases the finger without introducing movement',
+      );
     } finally {
       await browser.close();
       cleanup.forEach((fn) => fn());

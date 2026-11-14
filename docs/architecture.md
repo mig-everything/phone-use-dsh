@@ -90,9 +90,9 @@ flowchart TD
 | --- | --- | --- | --- |
 | 鸿蒙 | 随包 UiTest 扩展连续 JPEG；AVScreenCapture/H.264 可选；截图回退 | 同一认证 HDC socket 的 atomicTouch / native input；CLI 回退 | 现有 HDC 与系统 UiTest extension；不要求主机 Java/C++ |
 | Android | 随包 scrcpy server 的 MediaCodec H.264；模拟器可选 gRPC → 主机编码 | gRPC 或 scrcpy control；ADB 回退 | ADB；完整 scrcpy 和主机 Java 均非必需；gRPC 编码可选 FFmpeg |
-| iOS | WDA MJPEG；模拟器可选 idb/IOSurface H.264 | WDA 完整手势；显式启用并验证的 idb 可连续 HID | WDA；可选 idb 预编译包；真机仍需签名和调试连接 |
+| iOS | WDA MJPEG；模拟器可选 idb/IOSurface H.264 | WDA 完整手势；显式启用的随包 CoreSimulator 桥接或 idb 可连续触摸 | WDA；可选 idb 视频预编译包；真机仍需签名和调试连接 |
 
-桥接与平台 SDK 负责采集/输入，PhoneService 管理授权和坐标，宿主适配只传递数据。C++ 仅用于鸿蒙必须加载到设备进程的扩展；复用 Android 设备现有 ART 和 iOS WDA/idb 不意味着额外安装主机 Java 或自行重写 Apple 私有框架。两种 HarmonyOS ELF 及 Android server 的架构/哈希纳入 CI，许可证随包。iOS 原生视频不隐式开启 HID；本机 iOS 27 出现原生落点偏差，因此 HID 目前为 `nativeInput: true` 实验选项，默认 WDA 控制。
+桥接与平台 SDK 负责采集/输入，PhoneService 管理授权和坐标，宿主适配只传递数据。鸿蒙 C++ 扩展加载到设备进程；iOS 的小型 Objective-C++ 工具复用本机 Xcode/CoreSimulator。Android 复用设备已有 ART，不需要主机 Java。随包原生产物的架构、源码和哈希纳入 CI，许可证随包。iOS 原生视频不隐式开启输入；`nativeInput: true`、`inputBridge: "bundled"` 已在 Xcode 27 / iOS 27 的 iPhone 16 Pro 主屏竖屏验证，其他几何状态回退 WDA。默认仍由 WDA 控制，真机通道不变。
 
 人工连续输入使用 SDK 的 `pointer(down/move/up/cancel)` 和短期视图租约；不向模型暴露逐像素鼠标事件。移动期间合并尚未发送的点，保持每个设备的队列有界。另一视图或 Agent 不能插入持有手指期间的动作。松开、隐藏、暂停、断连、5 秒无事件和几何失效会释放手指。Android 手势固定在原始 socket/backend 上；几何变化后发送释放，不能中途切换到另一通道重放。鸿蒙设备侧另检查 display epoch；核心长手势周期性复核几何，组件收到新显示几何也立即取消。
 
@@ -189,7 +189,7 @@ type DisplayTopology = {
 
 `phone_devices` 与 `phone_panel` 共享会话注册表。同作用域重复打开设备复用会话；不同作用域和进程受独占锁约束。`openai/session` 存在时按对话隔离，否则同一 MCP 进程共享 local 作用域。组件持有随机 `panel_id`；`phone_connect` 在 app-only 元数据中签发一次性回环连接票据。票据不进入模型内容；服务器只监听 127.0.0.1，校验 Host、路径和每个设备的作用域，不接受 URL 中的认证信息。
 
-媒体与控制优先通过 WebRTC DataChannel 传输，WS/WSS 及 MCP 图片为回退。MCP 负责信令、语义工具和完整截图；WebRTC 的临时 DTLS 身份通过 SDP 指纹校验，无需系统信任配置。仅使用回环 ICE-lite，不使用 STUN/TURN 或公网转发；两种直连复用同一套操作协议，每台设备只允许一批未确认画面，浏览器解码显示后确认，隐藏卡片解除订阅。控制仍逐设备串行；原生视频可在控制期间继续播放，但这类观察标记 input_ready:false 且不进入可操作观察池。预览采集不把设备标成 busy。
+MCP Apps 的媒体与控制优先通过 WebRTC DataChannel 传输，WS/WSS 及 MCP 图片为回退。MCP 负责信令、语义工具和完整截图；WebRTC 的临时 DTLS 身份通过 SDP 指纹校验，无需系统信任配置。仅使用回环 ICE-lite，不使用 STUN/TURN 或公网转发。DSH 使用宿主已有认证的 Fetch 通道，并将帧确认与有序输入分开，避免画面反馈阻塞手势。直连共用操作协议：默认每台设备一批未确认画面，DSH 可协商最多四批，浏览器按设备顺序解码后确认；未知或重复确认不增加额度。隐藏卡片解除订阅，慢消费者有界退出。控制仍逐设备串行；原生视频可在控制期间继续播放，但这类观察标记 input_ready:false 且不进入可操作观察池。预览采集不把设备标成 busy。
 
 Android scrcpy 4.x 保留 MediaCodec 的 H.264 包，直接交给 WebCodecs；同一 server 的 control socket 注入触摸/按键，写入后出错只返回 uncertain，不回放 ADB 输入。鸿蒙 companion 的新 `/stream-framed` 提供兼容的 H.264 包，保留设备 PTS 与关键帧；现有 `/stream` 保留兼容。iOS 真机继续使用 WDA MJPEG；模拟器可选 idb 视频与 HID 输入，控件树、截图、文本和启动仍走 WDA。JPEG 直连在尺寸允许时不重新编码，单卡上限 3200×3200，并排上限 1440×1600；MCP 回退 960×1280。
 

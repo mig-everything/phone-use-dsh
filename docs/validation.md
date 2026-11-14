@@ -8,7 +8,7 @@ The first public release derives from the 0.9.3 implementation and introduces di
 
 Checks on November 14, 2026, on macOS / Apple Silicon:
 
-- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (79.7 seconds for the final run).
+- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (82.7 seconds for the final run).
 - Formatting, TypeScript build and bundled native artifact checks passed.
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
@@ -19,13 +19,15 @@ An initial Android 17 cold boot showed Launcher/System UI ANRs under severe host
 
 ### Desktop interaction fixes
 
-- Fast drags retain their final move before release even if the down acknowledgement arrives after mouseup. Cancellation does not add a move, and uncertain input is not replayed.
+- Fast drags retain their initial and final movement before release even if the down acknowledgement arrives after mouseup. A completed buffered gesture spaces its two samples by a display interval: iOS otherwise acknowledged a burst without moving the page. Ongoing moves remain immediate. Cancellation does not add movement, and uncertain input is not replayed.
 - DSH frame acknowledgements use a separate bounded, batched feedback route. Device controls retain their own strict order. A negotiated window permits at most four unacknowledged batches per device; unknown or duplicate acknowledgements do not grant credit. Slow consumers still stop rather than accumulate an unbounded video backlog.
 - Static H.264 views renew their visible input evidence from the healthy current stream after ten seconds. Original capture times and the agent's 30-second observation expiry remain unchanged.
 - HTTP errors preserve structured `PANEL_CLOSED` and uncertain-action information. A sidebar can recover its expired panel after plugin reload without creating another iframe or replaying input.
 - A faster status poll no longer discards a pending discovery result. A deterministic browser regression reproduced the empty picker before the fix and passed afterward.
 
 A transport-only benchmark with an artificial 80 ms acknowledgement delay increased from 12.5 to 49 batches/second with the bounded window. This is not a desktop FPS claim. The installed bundle passed continuous native drag and a rapid reverse drag after 35 seconds of idle preview on Android and HarmonyOS. Page observations confirmed the list moved in both directions. Browser integration input round trips for the rapid gesture were 50/1 ms (down/move) on Android and 128/22 ms on HarmonyOS. HarmonyOS used UiTest JPEG; Android used H.264. Host load, capture cadence and rendering remain separate factors.
+
+An additional iOS check exposed a gesture acknowledged without moving the page when all buffered events arrived in one display interval. Retaining two movement samples alone was insufficient; spacing the completed burst fixed it. Fresh native trees then confirmed a rapid reverse drag from the bottom of Settings to the top. The browser regression also verifies that hiding during a buffered gesture cancels without sending those moves. The Android acceptance instance was subsequently restarted with `-gpu host`; its log confirms the Apple M2 renderer instead of SwiftShader. The repository's emulator starter already defaults to host rendering.
 
 ### Release acceptance on isolated devices
 
@@ -45,7 +47,7 @@ Three real captured screenshots (one per platform) were also recognized concurre
 
 The cold iOS Springboard tree request hit WDA's 15-second deadline; a screenshot succeeded and subsequent Settings trees/actions passed. One iOS scroll attempt after a page transition correctly returned `STALE_NODE`; a fresh inspection was required. HarmonyOS screenshot settling reached its deadline when a capture itself was slow, and returned that status instead of claiming animation completion. These limits remain visible to callers.
 
-The CI workflow is configured for the Linux full suite plus macOS/Windows portability checks on Node.js 22. Local checks do not establish a remote CI result; consult [public CI](https://github.com/mig-everything/phone-use-dsh/actions) after the source is pushed.
+The Linux full suite and macOS/Windows portability checks on Node.js 22 passed in [public CI](https://github.com/mig-everything/phone-use-dsh/actions/runs/43616120219) for commit `2089a73`. Subsequent commits run the same workflow; use the [current CI result](https://github.com/mig-everything/phone-use-dsh/actions) to verify the exact release revision.
 
 ## Automated coverage
 
