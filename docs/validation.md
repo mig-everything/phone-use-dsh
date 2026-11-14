@@ -13,6 +13,7 @@ Checks on November 14, 2026, on macOS / Apple Silicon:
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
 - DSH Desktop displayed the installed **0.9.4** component running. An isolated Android emulator connected through the device picker; H.264 preview and native input readiness were visible, and a tap dismissed a system dialog.
+- The installed 0.9.4 core separately exercised continuous Android `down/move/up` input at 1080×2340 with a 944×2048 scrcpy stream. A fresh screenshot confirmed that the notification shade opened. This validates that device path and coordinate mapping, not the desktop mouse event path. The test session and emulator were released afterward.
 
 The desktop drag check is **not signed off**: the cold-booted emulator showed Launcher/System UI ANRs, a fallback gesture reported about 6.2 seconds of queue time, and desktop automation repeatedly returned `noWindowsAvailable`. These observations do not establish smooth dragging or a fixed frame rate. Protocol/browser input regressions passed separately. Do not interpret those tests as a desktop performance measurement.
 
