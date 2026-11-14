@@ -1,0 +1,2 @@
+# The native artifact manifest hashes these source bytes on every CI platform.
+native/ios-simulator-input/phone_use.mm text eol=lf

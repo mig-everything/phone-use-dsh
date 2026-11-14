@@ -1,0 +1,12 @@
+{
+  "name": "phone-use",
+  "version": "0.9.4",
+  "description": "HarmonyOS-first phone control with MCP and screen UI",
+  "requires_local_executor": true,
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Phone Use",
+    "shortDescription": "操作鸿蒙、Android 和 iPhone"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.phone-use/
+.env
+phone-use.local.json
+*.tgz
+.DS_Store
+coverage/
+releases/
+*.pem
+*.p12
+*.pfx

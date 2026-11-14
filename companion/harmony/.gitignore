@@ -1,0 +1,11 @@
+build/
+.hvigor/
+.cxx/
+oh_modules/
+.idea/
+local.properties
+oh-package-lock.json5
+entry/oh-package-lock.json5
+*.p12
+*.p7b
+*.cer

@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.5.0)
+project(phonecapture)
+set(CMAKE_CXX_STANDARD 17)
+add_library(phonecapture SHARED capture.cpp)
+target_link_libraries(phonecapture PUBLIC libace_napi.z.so libnative_avscreen_capture.so libnative_media_venc.so libnative_media_core.so libnative_media_codecbase.so libnative_window.so libnative_buffer.so)
+target_compile_options(phonecapture PRIVATE -Wall -Wextra)

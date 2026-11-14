@@ -1,0 +1,55 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  portability:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run check:native
+      - name: Core, native launcher, parsers, OCR fallback and MCP contracts
+        run: node --test dist/tests/adapters.test.js dist/tests/core.test.js dist/tests/mcp.test.js dist/tests/launcher.test.js dist/tests/perception.test.js dist/tests/ocr.test.js dist/tests/portable-ocr.test.js dist/tests/interaction.test.js dist/tests/targets.test.js dist/tests/native-input.test.js dist/tests/host-dsh.test.js dist/tests/appearance.test.js
+      - name: Isolated plugin installation with production dependencies
+        run: node scripts/install-work.mjs
+      - name: OCR from installed production package
+        run: node scripts/check-ocr.mjs --installed
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run check:native
+      # Native preview exercises H.264 WebCodecs. The open-source Chromium
+      # distribution does not include the same proprietary codecs as Chrome.
+      - run: npx playwright-core install chrome --with-deps
+      - name: Unit, MCP, and browser integration tests
+        run: |
+          export PHONE_USE_CHROME="$(command -v google-chrome)"
+          test -x "$PHONE_USE_CHROME"
+          "$PHONE_USE_CHROME" --version
+          npm test
+      - run: npm pack --dry-run
+      - run: node scripts/install-work.mjs
+      - run: node scripts/check-ocr.mjs --installed
+      - name: Build DSH distribution
+        run: npm run package:dsh
+      - name: Install pinned official DSH runtime
+        run: npm install --prefix "$RUNNER_TEMP/phone-use-dsh-runtime" --ignore-scripts --no-audit --no-fund @deepseek-ai/dsh@0.2.2-rc.1
+      - name: Validate DSH archive with isolated production dependencies
+        run: npm run check:dsh -- "$RUNNER_TEMP/phone-use-dsh-runtime/node_modules/@deepseek-ai/dsh"

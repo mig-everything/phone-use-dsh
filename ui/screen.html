@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Phone Use</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        --paper: #f8f9fb;
+        --surface: #fff;
+        --ink: #202126;
+        --muted: #85868e;
+        --line: #e5e5e9;
+        --accent: #292a30;
+        --soft: #ececf0;
+        --error: #b34a43;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 18px 22px 14px;
+      }
+      button,
+      a,
+      summary {
+        -webkit-tap-highlight-color: transparent;
+      }
+      button,
+      summary,
+      .download {
+        font: inherit;
+        font-size: 12px;
+        color: inherit;
+        cursor: pointer;
+        border: 0;
+        background: transparent;
+        border-radius: 9px;
+        padding: 8px 11px;
+        transition:
+          background 0.16s,
+          opacity 0.16s;
+      }
+      button:hover,
+      summary:hover,
+      .download:hover {
+        background: var(--soft);
+      }
+      button:focus-visible,
+      summary:focus-visible,
+      a:focus-visible,
+      .card:focus-visible {
+        outline: 2px solid #7d9aac;
+        outline-offset: 4px;
+      }
+      button:disabled {
+        opacity: 0.35;
+        cursor: default;
+      }
+      .primary {
+        background: var(--accent);
+        color: var(--paper);
+        border-radius: 20px;
+        padding: 9px 15px;
+      }
+      .primary:hover {
+        background: var(--ink);
+      }
+      [hidden] {
+        display: none !important;
+      }
+      svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.5;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      main {
+        max-width: 1480px;
+        margin: auto;
+      }
+      .topbar,
+      .row,
+      .toolbar,
+      .card-head,
+      .switcher,
+      .device-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .topbar {
+        justify-content: space-between;
+        min-height: 32px;
+        margin-bottom: 14px;
+      }
+      .identity {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      .identity svg {
+        width: 16px;
+        height: 16px;
+        color: var(--muted);
+      }
+      h1 {
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: -0.3px;
+        margin: 0;
+      }
+      .count {
+        font-size: 10px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+        padding-left: 4px;
+      }
+      .row {
+        gap: 4px;
+      }
+      .toolbar {
+        justify-content: flex-end;
+      }
+      .switcher {
+        gap: 2px;
+        background: var(--soft);
+        border-radius: 9px;
+        padding: 2px;
+      }
+      .switcher button {
+        padding: 6px;
+        color: var(--muted);
+      }
+      .switcher button[aria-pressed='true'] {
+        background: var(--surface);
+        color: var(--ink);
+        box-shadow: 0 1px 3px #0000000a;
+      }
+      .icon-button {
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        padding: 6px;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        justify-content: center;
+        overflow-x: auto;
+        margin: 0 0 18px;
+        scrollbar-width: thin;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        max-width: 220px;
+        white-space: nowrap;
+        border-radius: 20px;
+        color: var(--muted);
+        font-size: 11px;
+        padding: 7px 12px;
+      }
+      .tab span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tab[aria-pressed='true'] {
+        color: var(--ink);
+        background: var(--surface);
+        box-shadow: 0 1px 5px #00000008;
+      }
+      .dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #6ba58a;
+        display: inline-block;
+        flex: none;
+      }
+      .dot.paused {
+        background: #b99b68;
+      }
+      .workspace {
+        display: grid;
+        gap: 20px;
+        align-items: start;
+      }
+      .workspace[data-mode='grid'] {
+        grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr));
+      }
+      .workspace[data-mode='focus'] {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .card {
+        min-width: 0;
+        position: relative;
+        border-radius: 18px;
+        --screen-height: 600px;
+        --aspect: 0.48;
+      }
+      .workspace[data-mode='grid'] .card {
+        --screen-height: 480px;
+      }
+      .card-head {
+        justify-content: space-between;
+        gap: 6px;
+        max-width: calc(var(--screen-height) * var(--aspect) + 24px);
+        margin: 0 auto 10px;
+        padding: 0 3px;
+      }
+      .device-title {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .name {
+        font-size: 12px;
+        font-weight: 500;
+        padding: 5px 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 245px;
+        text-align: left;
+      }
+      .platform {
+        font-size: 9px;
+        color: var(--muted);
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .pill {
+        font-size: 10px;
+        color: var(--muted);
+        white-space: nowrap;
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+      .pill:before {
+        content: '';
+        width: 4px;
+        height: 4px;
+        background: #75a58d;
+        border-radius: 50%;
+      }
+      .pill[data-status='paused']:before,
+      .pill[data-status='busy']:before {
+        background: #b99b68;
+      }
+      .pill[data-status='error'] {
+        color: var(--error);
+      }
+      .pill[data-status='error']:before {
+        background: var(--error);
+      }
+      .stage {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 240px;
+        padding: 2px 5px 48px;
+      }
+      .device-shell {
+        position: relative;
+        isolation: isolate;
+        width: min(100%, calc(var(--screen-height) * var(--aspect)));
+        aspect-ratio: var(--aspect);
+        --rim: 4px;
+        --corner: 11.5cqw;
+        container-type: inline-size;
+        padding: var(--rim);
+        border: 1px solid #91949b;
+        border-radius: 32px;
+        background: linear-gradient(
+          118deg,
+          #a6a8af 0%,
+          #484b53 8%,
+          #202229 28%,
+          #686b73 51%,
+          #272a31 74%,
+          #9699a0 100%
+        );
+        box-shadow:
+          0 0 0 1px #16181e,
+          0 1px 0 2px #ffffff80,
+          0 16px 28px -18px #1b233c55,
+          0 4px 8px -5px #151b2f40;
+        transition:
+          width 0.2s,
+          aspect-ratio 0.2s;
+        overflow: visible;
+      }
+      :root[data-host='dsh'] .card {
+        --screen-height: min(640px, max(300px, calc(100dvh - 176px)));
+      }
+      :root[data-host='dsh'] .workspace[data-mode='grid'] .card {
+        --screen-height: min(500px, max(280px, calc(100dvh - 176px)));
+      }
+      .card-head .more {
+        opacity: 0;
+        transition: opacity 0.15s;
+      }
+      .card:hover .card-head .more,
+      .card:focus-within .card-head .more,
+      .card-head .more[open] {
+        opacity: 1;
+      }
+      .pill[data-status='ready'] {
+        font-size: 0;
+        gap: 0;
+      }
+      @media (hover: none) {
+        .card-head .more {
+          opacity: 1;
+        }
+      }
+      .screen {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+        border-radius: min(27px, 10cqw);
+        touch-action: none;
+        user-select: none;
+        -webkit-user-drag: none;
+        background: #101114;
+      }
+      .native-frame,
+      .native-overlay {
+        display: none;
+        pointer-events: none;
+      }
+      .device-shell[data-appearance='native'] {
+        padding: 0;
+        container-type: normal;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: transparent;
+      }
+      .device-shell[data-appearance='native']:before,
+      .device-shell[data-appearance='native']:after {
+        display: none;
+      }
+      .device-shell[data-appearance='native'] .native-frame {
+        display: block;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        filter: drop-shadow(0 12px 12px #00000024);
+      }
+      .device-shell[data-appearance='native'] .screen,
+      .device-shell[data-appearance='native'] .native-overlay {
+        position: absolute;
+        left: var(--sx);
+        top: var(--sy);
+        width: var(--sw);
+        height: var(--sh);
+        border-radius: 0;
+        mask-size: 100% 100%;
+      }
+      .device-shell[data-appearance='native'] .native-overlay {
+        display: block;
+        z-index: 2;
+      }
+      .device-shell[data-appearance='native']:not(:has(.screen:not([hidden]))) .native-overlay {
+        display: none;
+      }
+      .device-shell[data-folded='false']:not([data-appearance='native']) {
+        border-radius: 22px;
+      }
+      .device-shell[data-folded='false']:not([data-appearance='native']) .screen {
+        border-radius: 17px;
+      }
+      .placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+        padding: 24px;
+        color: #96979d;
+        pointer-events: none;
+      }
+      .placeholder strong {
+        font-size: 12px;
+        font-weight: 500;
+        color: #e2e2e7;
+      }
+      .placeholder small {
+        font-size: 10px;
+        line-height: 1.7;
+      }
+      .screen:not([hidden]) ~ .placeholder {
+        display: none;
+      }
+      .outline {
+        width: 20px;
+        height: 34px;
+        border: 1px solid #64656d;
+        border-radius: 5px;
+        margin-bottom: 3px;
+      }
+      .controls {
+        position: absolute;
+        bottom: 2px;
+        left: 50%;
+        transform: translate(-50%, 5px);
+        display: flex;
+        align-items: center;
+        gap: 3px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        box-shadow: 0 4px 15px #00000006;
+        opacity: 0;
+        pointer-events: none;
+        transition:
+          opacity 0.16s,
+          transform 0.16s;
+        z-index: 4;
+      }
+      .card:hover .controls,
+      .card:focus-within .controls,
+      .card:focus .controls {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translate(-50%, 0);
+      }
+      .controls button {
+        width: 34px;
+        height: 32px;
+        padding: 7px 8px;
+        display: grid;
+        place-items: center;
+      }
+      .controls .divider {
+        width: 1px;
+        height: 16px;
+        background: var(--line);
+        margin: 0 3px;
+      }
+      .more {
+        position: relative;
+      }
+      .more summary {
+        list-style: none;
+        padding: 5px;
+        color: var(--muted);
+      }
+      .more summary::-webkit-details-marker {
+        display: none;
+      }
+      .detail-menu {
+        position: absolute;
+        right: 0;
+        top: 32px;
+        z-index: 10;
+        width: 248px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--surface);
+        box-shadow: 0 12px 40px #00000016;
+        font-size: 11px;
+      }
+      .detail-menu button {
+        display: block;
+        width: 100%;
+        text-align: left;
+      }
+      .detail-menu .device-id {
+        overflow-wrap: anywhere;
+        line-height: 1.7;
+        font-size: 10px;
+        color: var(--muted);
+        padding: 7px;
+      }
+      .geometry {
+        font-size: 10px;
+        color: var(--muted);
+        padding: 6px 7px;
+        line-height: 1.9;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 6px;
+      }
+      .geometry span {
+        display: block;
+      }
+      .fold {
+        display: flex;
+        gap: 2px;
+        padding-top: 6px;
+        border-top: 1px solid var(--line);
+        margin-top: 5px;
+      }
+      .fold button {
+        text-align: center;
+        padding: 7px 3px;
+        font-size: 10px;
+      }
+      .fold button[aria-pressed='true'] {
+        background: var(--soft);
+      }
+      .activity {
+        display: block;
+        line-height: 1.7;
+        padding: 7px;
+        font-size: 10px;
+        color: var(--muted);
+      }
+      .card-error {
+        font-size: 11px;
+        line-height: 1.7;
+        color: var(--error);
+        max-width: 500px;
+        margin: 0 auto;
+        padding: 8px 10px;
+        overflow-wrap: anywhere;
+      }
+      .gesture {
+        position: absolute;
+        z-index: 5;
+        width: 18px;
+        height: 18px;
+        margin: -9px;
+        border: 1.5px solid #fff;
+        border-radius: 50%;
+        background: #657f9f88;
+        box-shadow: 0 0 0 3px #00000018;
+        pointer-events: none;
+      }
+      .status {
+        font-size: 11px;
+        line-height: 1.8;
+        color: var(--error);
+        overflow-wrap: anywhere;
+      }
+      .status:empty {
+        display: none;
+      }
+      .empty-workspace {
+        text-align: center;
+        padding: 95px 24px 110px;
+      }
+      .empty-symbol {
+        width: 44px;
+        height: 72px;
+        border: 1.5px solid #b8b9c1;
+        border-radius: 10px;
+        position: relative;
+        margin: 0 auto 25px;
+        transform: rotate(-7deg);
+      }
+      .empty-symbol:after {
+        content: '';
+        position: absolute;
+        width: 13px;
+        height: 2px;
+        background: #b8b9c1;
+        bottom: 7px;
+        left: 14px;
+      }
+      .empty-workspace h2 {
+        font-size: 19px;
+        font-weight: 500;
+        letter-spacing: -0.6px;
+        margin: 0 0 12px;
+      }
+      .empty-workspace p {
+        font-size: 12px;
+        color: var(--muted);
+        line-height: 1.9;
+        margin: 0 auto 24px;
+        max-width: 290px;
+      }
+      .picker {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--surface);
+        padding: 16px;
+        margin: 0 0 22px;
+      }
+      .picker .row {
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      .picker h2 {
+        font-size: 12px;
+        font-weight: 500;
+        margin: 0;
+      }
+      .device-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+        gap: 7px;
+      }
+      .device-option {
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px;
+        background: var(--paper);
+        border-radius: 10px;
+      }
+      .device-option strong {
+        display: block;
+        font-size: 12px;
+        font-weight: 500;
+        margin-bottom: 4px;
+      }
+      .device-option small {
+        display: block;
+        font-size: 10px;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+      .device-option button {
+        white-space: nowrap;
+      }
+      .picker-hint {
+        font-size: 10px;
+        line-height: 1.8;
+        color: var(--muted);
+        margin: 10px 0 0;
+      }
+      .footer {
+        font-size: 10px;
+        color: var(--muted);
+        text-align: center;
+        margin: 4px 0 0;
+        min-height: 16px;
+      }
+      .connection {
+        display: inline-block;
+        margin-left: 8px;
+        text-align: left;
+        position: relative;
+      }
+      .connection summary {
+        font-size: inherit;
+        padding: 4px 6px;
+        cursor: pointer;
+      }
+      .connection-info {
+        position: absolute;
+        bottom: 24px;
+        right: 0;
+        width: min(330px, 80vw);
+        padding: 16px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        box-shadow: 0 8px 32px #0002;
+        z-index: 10;
+        line-height: 1.7;
+      }
+      .connection-info p {
+        margin: 0 0 10px;
+      }
+      dialog {
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 16px;
+        max-width: 90vw;
+        max-height: 94vh;
+      }
+      dialog::backdrop {
+        background: #0008;
+        backdrop-filter: blur(5px);
+      }
+      dialog .row {
+        justify-content: space-between;
+        margin-bottom: 12px;
+      }
+      dialog img {
+        max-width: 80vw;
+        max-height: 72vh;
+        display: block;
+        object-fit: contain;
+        margin: auto;
+      }
+      dialog p {
+        font-size: 11px;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+      .download {
+        text-decoration: none;
+        display: inline-block;
+      }
+      :root[data-theme='dark'] {
+        color-scheme: dark;
+        --paper: #18191d;
+        --surface: #25262c;
+        --ink: #e7e7ec;
+        --muted: #90919c;
+        --line: #35363e;
+        --accent: #dedee5;
+        --soft: #303138;
+        --error: #e69a91;
+      }
+      @media (hover: none) {
+        .controls {
+          opacity: 1;
+          pointer-events: auto;
+          transform: translate(-50%, 0);
+        }
+      }
+      @media (max-width: 520px) {
+        body {
+          padding: 14px 16px;
+        }
+        .count {
+          display: none;
+        }
+        .name {
+          max-width: 175px;
+        }
+        .platform {
+          display: none;
+        }
+        .card {
+          --screen-height: 540px;
+        }
+        .workspace[data-mode='grid'] .card {
+          --screen-height: 460px;
+        }
+        .topbar {
+          margin-bottom: 18px;
+        }
+        .tabs {
+          justify-content: flex-start;
+        }
+        .detail-menu {
+          width: 230px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *:before,
+        *:after {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class="topbar">
+        <div class="identity">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="6" y="2" width="12" height="20" rx="3" />
+            <path d="M10 18h4" />
+          </svg>
+          <h1>Phone Use</h1>
+          <span class="count" id="count">等待连接</span>
+        </div>
+        <div class="row">
+          <div class="switcher" role="group" aria-label="显示布局">
+            <button id="focus-mode" aria-label="单设备" title="单设备" aria-pressed="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="6" y="3" width="12" height="18" rx="2" />
+              </svg></button
+            ><button id="grid-mode" aria-label="多设备" title="多设备" aria-pressed="false">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="7" height="16" rx="1.5" />
+                <rect x="14" y="4" width="7" height="16" rx="1.5" />
+              </svg>
+            </button>
+          </div>
+          <button id="expand" class="icon-button" aria-label="展开视图" title="展开视图" hidden>
+            ↗</button
+          ><button id="add" class="icon-button" aria-label="添加设备" title="添加设备" disabled>
+            <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+        </div>
+      </header>
+      <section class="picker" id="picker" hidden aria-label="添加设备">
+        <div class="row">
+          <h2>连接设备</h2>
+          <div>
+            <button id="discover">重新发现</button
+            ><button id="dismiss-picker" aria-label="关闭设备列表">✕</button>
+          </div>
+        </div>
+        <div class="device-list" id="device-list"></div>
+        <p class="picker-hint" id="diagnostics"></p>
+      </section>
+      <nav class="tabs" id="tabs" aria-label="当前设备"></nav>
+      <div class="empty-workspace" id="empty-workspace">
+        <div class="empty-symbol" aria-hidden="true"></div>
+        <h2>你的设备，就在这里。</h2>
+        <p>连接手机或模拟器，在对话中安排任务。<br />支持不同平台的设备同时显示。</p>
+        <button id="empty-add" class="primary" disabled>连接设备</button>
+      </div>
+      <section class="workspace" id="workspace" data-mode="focus" aria-label="手机屏幕"></section>
+      <div class="status" id="status" role="status" aria-live="polite"></div>
+      <footer class="footer" id="connection-footer">
+        <span id="preview-note">点击操作 · 拖动后松手执行</span>
+        <details class="connection">
+          <summary id="connection-status">兼容预览</summary>
+          <div class="connection-info">
+            <p id="connection-detail">正在连接</p>
+            <p id="connection-help"></p>
+            <p id="connection-version"></p>
+            <button id="retry-connection">重试直连</button>
+          </div>
+        </details>
+      </footer>
+    </main>
+    <dialog id="capture-dialog" aria-label="设备截图">
+      <div class="row">
+        <strong>设备截图</strong><button id="close-capture" aria-label="关闭截图">✕</button>
+      </div>
+      <img id="capture-image" alt="本次设备截图" />
+      <p id="capture-note"></p>
+      <a id="save-capture" class="download" download="phone-use.png">保存原图 ↗</a>
+    </dialog>
+    <script>
+      /*__PHONE_USE_SCRIPT__*/
+    </script>
+  </body>
+</html>

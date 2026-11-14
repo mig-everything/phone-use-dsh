@@ -1,0 +1,126 @@
+{
+  "name": "phone-use",
+  "version": "0.9.4",
+  "description": "Cross-platform phone use SDK, MCP and DSH plugin for HarmonyOS, Android and iOS",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mig-everything/phone-use-dsh.git"
+  },
+  "homepage": "https://github.com/mig-everything/phone-use-dsh#readme",
+  "bugs": {
+    "url": "https://github.com/mig-everything/phone-use-dsh/issues"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    },
+    "./mcp": {
+      "types": "./dist/src/mcp.d.ts",
+      "import": "./dist/src/mcp.js"
+    },
+    "./preview": {
+      "types": "./dist/src/preview.d.ts",
+      "import": "./dist/src/preview.js"
+    },
+    "./dsh": {
+      "types": "./dist/src/hosts/dsh/index.d.ts",
+      "import": "./dist/src/hosts/dsh/index.js"
+    }
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "phone-use": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "ui",
+    "plugin.json",
+    "mcp.json",
+    ".codex-plugin",
+    ".mcp.json",
+    "skills",
+    "scripts/start.mjs",
+    "scripts/launch-node.sh",
+    "scripts/install-codex.mjs",
+    "scripts/install-work.mjs",
+    "scripts/check-work.mjs",
+    "scripts/smoke-device.mjs",
+    "scripts/smoke-multi.mjs",
+    "scripts/package-plugin.mjs",
+    "phone-use.example.json",
+    "README.md",
+    "docs",
+    "LICENSE",
+    "scripts/companion-files.mjs",
+    "companion/harmony/AppScope",
+    "companion/harmony/entry/src",
+    "companion/harmony/entry/build-profile.json5",
+    "companion/harmony/entry/hvigorfile.ts",
+    "companion/harmony/entry/oh-package.json5",
+    "companion/harmony/hvigor",
+    "companion/harmony/build-profile.json5",
+    "companion/harmony/hvigorfile.ts",
+    "companion/harmony/oh-package.json5",
+    "companion/harmony/README.md",
+    "protocols",
+    "scripts/start-android-emulator.mjs",
+    "scripts/setup-preview-tls.mjs",
+    "scripts/analyze-page.mjs",
+    "native/vision-ocr.js",
+    "scripts/host-runtime.mjs",
+    "native/portable-ocr.cjs",
+    "assets/ocr",
+    "scripts/check-ocr.mjs",
+    "native/harmony-bridge",
+    "native/android-server",
+    "native/ios-simulator-input",
+    "scripts/build-ios-input.mjs",
+    "scripts/build-harmony-bridge.mjs",
+    "scripts/check-native.mjs"
+  ],
+  "scripts": {
+    "format": "prettier --write src tests ui scripts native packages package.json plugin.json mcp.json .codex-plugin .mcp.json phone-use.example.json tsconfig.json .github",
+    "format:check": "prettier --check src tests ui scripts native packages package.json plugin.json mcp.json .codex-plugin .mcp.json phone-use.example.json tsconfig.json .github",
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "check:work": "node scripts/check-work.mjs",
+    "test": "npm run build && node --test --test-concurrency=4 dist/tests/*.test.js",
+    "start": "node dist/src/cli.js",
+    "doctor": "node dist/src/cli.js doctor",
+    "demo": "node scripts/smoke-device.mjs --demo --device demo:foldable",
+    "smoke": "node scripts/smoke-device.mjs",
+    "smoke:multi": "node scripts/smoke-multi.mjs",
+    "package:plugin": "npm run build && node scripts/package-plugin.mjs",
+    "package:dsh": "npm run build && node scripts/package-dsh.mjs",
+    "prepack": "npm run build",
+    "check:ocr": "node scripts/check-ocr.mjs",
+    "build:harmony-bridge": "node scripts/build-harmony-bridge.mjs",
+    "build:ios-input": "node scripts/build-ios-input.mjs",
+    "check:native": "node scripts/check-native.mjs",
+    "check:dsh": "node --expose-internals scripts/check-dsh-runtime.mjs"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "1.14.6",
+    "@grpc/proto-loader": "0.8.1",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "sharp": "0.35.5",
+    "tesseract.js": "7.0.0",
+    "werift": "0.25.0",
+    "ws": "8.22.0",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/ws": "8.18.2",
+    "playwright-core": "1.64.1",
+    "prettier": "3.6.2",
+    "semver": "7.8.5",
+    "typescript": "5.9.3"
+  },
+  "private": true
+}

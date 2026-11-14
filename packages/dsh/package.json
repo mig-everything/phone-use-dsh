@@ -1,0 +1,60 @@
+{
+  "name": "@mig-everything/phone-use-dsh",
+  "version": "0.9.4",
+  "private": true,
+  "description": "Phone Use: HarmonyOS, Android and iPhone operations with a native DSH sidebar",
+  "type": "module",
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "phone-use",
+    "harmonyos",
+    "android",
+    "ios"
+  ],
+  "engines": {
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.2 <0.2.2-0 || >=0.2.2-rc.1 <0.3.0"
+  },
+  "main": "./core/dist/src/hosts/dsh/index.js",
+  "exports": {
+    ".": "./core/dist/src/hosts/dsh/index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right"
+      ]
+    },
+    "manifestVersion": 1
+  },
+  "files": [
+    "core",
+    "client.js",
+    "locale",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "assets",
+    "screenshots.json"
+  ],
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mig-everything/phone-use-dsh.git",
+    "directory": "packages/dsh"
+  },
+  "homepage": "https://github.com/mig-everything/phone-use-dsh/blob/main/docs/dsh.md",
+  "bugs": {
+    "url": "https://github.com/mig-everything/phone-use-dsh/issues"
+  },
+  "icon": "./assets/icon.svg"
+}

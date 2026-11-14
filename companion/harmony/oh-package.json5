@@ -1,0 +1,8 @@
+{
+  "modelVersion": "6.0.0",
+  "name": "phone-use-companion",
+  "version": "0.3.0",
+  "description": "Native screen capture companion for Phone Use",
+  "license": "MIT",
+  "dependencies": {}
+}

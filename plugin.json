@@ -1,0 +1,16 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "phone-use",
+  "version": "0.9.4",
+  "description": "Control native HarmonyOS, Android and iPhone devices through a local MCP bridge, with an optional screen component.",
+  "license": "MIT",
+  "extensions": {
+    "com.openai": {
+      "requires_local_executor": true,
+      "interface": {
+        "displayName": "Phone Use",
+        "shortDescription": "鸿蒙优先的多设备手机操作插件"
+      }
+    }
+  }
+}

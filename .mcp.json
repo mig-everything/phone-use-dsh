@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "phone_use": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/scripts/start.mjs"],
+      "cwd": "${PLUGIN_ROOT}"
+    }
+  }
+}

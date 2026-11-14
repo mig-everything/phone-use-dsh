@@ -1,0 +1,11 @@
+{
+  "name": "entry",
+  "version": "0.3.0",
+  "description": "Phone Use screen capture",
+  "main": "",
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "libphonecapture.so": "file:./src/main/cpp/types/libphonecapture"
+  }
+}

@@ -1,0 +1,7 @@
+Phone Use bundles unmodified chi_sim.traineddata and eng.traineddata from
+https://github.com/tesseract-ocr/tessdata_fast under Apache License 2.0.
+The exact bytes are pinned by SHA-256 in models.json and ocr-portable.ts.
+Upstream Git blob IDs: chi_sim 388bac276d033d06e5ed5ba7a7ad14ae58f97dab;
+eng bbef4675053b5b468cdb477053e28b1c698ba08e.
+See LICENSE in this directory. Tesseract.js and its WASM core retain their
+own Apache-2.0 licenses in installed production dependencies.

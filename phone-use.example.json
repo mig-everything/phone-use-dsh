@@ -1,0 +1,18 @@
+{
+  "harmony": {
+    "enabled": true,
+    "binary": "hdc",
+    "allowEmulatorFold": false
+  },
+  "android": {
+    "enabled": true,
+    "binary": "adb"
+  },
+  "ios": [],
+  "ocr": {
+    "enabled": true,
+    "languages": ["chi_sim", "eng"],
+    "workers": 3,
+    "timeoutMs": 2500
+  }
+}
