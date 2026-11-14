@@ -177,8 +177,15 @@ window.addEventListener('message', async event => {
       await page.mouse.down();
       await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'down'));
       assert.equal(service.state(opened.session_id).busy, true);
-      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3, { steps: 8 });
-      await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'move'));
+      // One large mouse move must start and advance a pan while still held,
+      // including when down was acknowledged before the movement arrived.
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
+      await until(
+        () => adapter.calls.filter((a) => a.kind === 'pointer' && a.phase === 'move').length >= 2,
+      );
+      const initialMoves = adapter.calls.filter((a) => a.kind === 'pointer' && a.phase === 'move');
+      assert.equal(initialMoves.length, 2);
+      assert.notDeepEqual(initialMoves[0], initialMoves[1]);
       assert(!adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'up'));
       // Host hides the panel during a gesture: input releases without a replayed swipe.
       await page.evaluate(() =>

@@ -241,7 +241,7 @@
       while (p.next || p.end) {
         const point = p.next ?? p.last ?? p;
         const previous = p.last ?? p;
-        if (p.end === 'up' && !p.last && (point.x !== p.x || point.y !== p.y)) {
+        if (p.end !== 'cancel' && !p.last && (point.x !== p.x || point.y !== p.y)) {
           // A pan recognizer may use its first move only to begin recognition.
           // Retain the first real sample as well as the latest; a single jump
           // gets one point on the same segment. This remains a bounded gesture.
@@ -250,11 +250,11 @@
             first && (first.x !== point.x || first.y !== point.y)
               ? first
               : { x: (p.x + point.x) / 2, y: (p.y + point.y) / 2 };
-          // A whole buffered gesture submitted within one display interval can
-          // be coalesced into no pan by the OS. Pace only this completed burst;
-          // ongoing moves remain immediate. Recheck cancellation after yielding.
+          // The OS may coalesce down and the first move when both arrive in one
+          // display interval. Pace just the beginning of a pan; subsequent moves
+          // remain immediate. Recheck cancellation after yielding.
           await new Promise((resolve) => setTimeout(resolve, 16));
-          if (p.end !== 'up') continue;
+          if (p.end === 'cancel') continue;
           p.last = anchor;
           await livePointer(e, 'move', anchor);
           await new Promise((resolve) => setTimeout(resolve, 16));

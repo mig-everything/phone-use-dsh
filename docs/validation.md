@@ -8,7 +8,7 @@ The first public release derives from the 0.9.3 implementation and introduces di
 
 Checks on November 14, 2026, on macOS / Apple Silicon:
 
-- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (82.7 seconds for the final run).
+- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (77.0 seconds for the final run).
 - Formatting, TypeScript build and bundled native artifact checks passed.
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
@@ -19,7 +19,7 @@ An initial Android 17 cold boot showed Launcher/System UI ANRs under severe host
 
 ### Desktop interaction fixes
 
-- Fast drags retain their initial and final movement before release even if the down acknowledgement arrives after mouseup. A completed buffered gesture spaces its two samples by a display interval: iOS otherwise acknowledged a burst without moving the page. Ongoing moves remain immediate. Cancellation does not add movement, and uncertain input is not replayed.
+- Fast drags retain their initial and final movement before release even if the down acknowledgement arrives after mouseup. The beginning of a pan spaces its first two movement samples by a display interval: Android and iOS otherwise acknowledged some bursts without moving the page. Subsequent moves remain immediate. Cancellation does not add movement, and uncertain input is not replayed.
 - DSH frame acknowledgements use a separate bounded, batched feedback route. Device controls retain their own strict order. A negotiated window permits at most four unacknowledged batches per device; unknown or duplicate acknowledgements do not grant credit. Slow consumers still stop rather than accumulate an unbounded video backlog.
 - Static H.264 views renew their visible input evidence from the healthy current stream after ten seconds. Original capture times and the agent's 30-second observation expiry remain unchanged.
 - HTTP errors preserve structured `PANEL_CLOSED` and uncertain-action information. A sidebar can recover its expired panel after plugin reload without creating another iframe or replaying input.
@@ -27,7 +27,9 @@ An initial Android 17 cold boot showed Launcher/System UI ANRs under severe host
 
 A transport-only benchmark with an artificial 80 ms acknowledgement delay increased from 12.5 to 49 batches/second with the bounded window. This is not a desktop FPS claim. The installed bundle passed continuous native drag and a rapid reverse drag after 35 seconds of idle preview on Android and HarmonyOS. Page observations confirmed the list moved in both directions. Browser integration input round trips for the rapid gesture were 50/1 ms (down/move) on Android and 128/22 ms on HarmonyOS. HarmonyOS used UiTest JPEG; Android used H.264. Host load, capture cadence and rendering remain separate factors.
 
-An additional iOS check exposed a gesture acknowledged without moving the page when all buffered events arrived in one display interval. Retaining two movement samples alone was insufficient; spacing the completed burst fixed it. Fresh native trees then confirmed a rapid reverse drag from the bottom of Settings to the top. The browser regression also verifies that hiding during a buffered gesture cancels without sending those moves. The Android acceptance instance was subsequently restarted with `-gpu host`; its log confirms the Apple M2 renderer instead of SwiftShader. The repository's emulator starter already defaults to host rendering.
+Additional iOS and Android native-channel checks exposed gestures acknowledged without moving the page when initial events arrived in one display interval. Retaining two movement samples alone was insufficient; spacing the beginning of the pan fixed it, including when down was acknowledged before mouseup. Fresh native trees confirmed rapid reverse drags back to the top of Settings. Browser regressions also verify movement before mouseup and cancellation without additional buffered movement. The Android acceptance instance was restarted with `-gpu host`; its log confirms the Apple M2 renderer instead of SwiftShader. The repository's emulator starter already defaults to host rendering.
+
+With host GPU rendering, Android's emulator gRPC video path retained the full 1080×2340 resolution. Browser draw counts during 2–3 second drags measured 21–28 frames/second; one scrcpy comparison measured 22 frames/second at 944×2048. HarmonyOS JPEG measured 27 frames/second in an isolated drag, falling to 13 during concurrent emulator activity. These short samples show host-load sensitivity, not sustained 60 FPS or end-to-end latency. The final Android check also verified a rapid reverse drag after 35 seconds of static preview; HarmonyOS passed continuous and rapid reverse drags with the same gesture fix.
 
 ### Release acceptance on isolated devices
 
@@ -35,7 +37,7 @@ The installed 0.9.4 archive was exercised through a real stdio MCP client, witho
 
 | Platform | Observed acceptance results |
 | --- | --- |
-| HarmonyOS 6.1.1 / API 24 | Unlock; launch Settings; native Battery navigation; cancel a login dialog; switch to Contacts; enter Chinese/English text in a draft; recognize its screenshot with bundled OCR; discard the draft; Home; scroll the About page. |
+| HarmonyOS 6.1.0 / API 24 | Unlock; launch Settings; native Battery navigation; cancel a login dialog; switch to Contacts; enter Chinese/English text in a draft; recognize its screenshot with bundled OCR; discard the draft; Home; scroll the About page. |
 | Android 15 / API 35 | Launch Settings; focus search; enter `battery`; open the matching Battery page; return; scroll search results; stable screenshot and bundled OCR; Home. The compact-navigation regression was reproduced before the fix and passed on the updated installed archive with `max_nodes: 1` and a query. |
 | iOS 27 / iPhone 16 Pro simulator | Launch Settings; focus search and enter Chinese text; close search; navigate General → About; scroll using a navigation-only region after a fresh compact inspection; stable screenshot and bundled OCR; Home; relaunch and navigate back. Screenshot pixels (1206×2622) and input points (402×874) remained aligned. |
 
