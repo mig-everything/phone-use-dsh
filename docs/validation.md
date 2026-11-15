@@ -8,7 +8,7 @@ The first public release derives from the 0.9.3 implementation and introduces di
 
 Checks on November 14, 2026, on macOS / Apple Silicon:
 
-- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests (77.0 seconds for the final run).
+- Full regression: **150 passed, 0 failed, 0 skipped**, including browser, MCP, OCR and DSH protocol tests.
 - Formatting, TypeScript build and bundled native artifact checks passed.
 - The 0.9.4 archive passed entry-point, dependency, license, screenshot and local-file exclusion checks.
 - The official **DSH 0.2.2-rc.1** runtime loaded the archive with independently installed production dependencies. It verified 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, authenticated Fetch and disable/re-enable. No external model requests were made.
@@ -20,6 +20,7 @@ An initial Android 17 cold boot showed Launcher/System UI ANRs under severe host
 ### Desktop interaction fixes
 
 - Fast drags retain their initial and final movement before release even if the down acknowledgement arrives after mouseup. The beginning of a pan spaces its first two movement samples by a display interval: Android and iOS otherwise acknowledged some bursts without moving the page. Subsequent moves remain immediate. Cancellation does not add movement, and uncertain input is not replayed.
+- Repeated coordinates are discarded before queuing native movement. Desktop hosts can emit a move at the unchanged down position; counting it as the first pan sample left a rapid reverse drag acknowledged but ineffective. A device-backed reproduction confirmed identical Settings controls before the fix and a return to the top afterward. Browser regressions cover stationary events with both prompt and delayed down acknowledgements.
 - DSH frame acknowledgements use a separate bounded, batched feedback route. Device controls retain their own strict order. A negotiated window permits at most four unacknowledged batches per device; unknown or duplicate acknowledgements do not grant credit. Slow consumers still stop rather than accumulate an unbounded video backlog.
 - Static H.264 views renew their visible input evidence from the healthy current stream after ten seconds. Original capture times and the agent's 30-second observation expiry remain unchanged.
 - HTTP errors preserve structured `PANEL_CLOSED` and uncertain-action information. A sidebar can recover its expired panel after plugin reload without creating another iframe or replaying input.

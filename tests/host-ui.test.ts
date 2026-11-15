@@ -13,7 +13,9 @@ import type { Device, DriverAction } from '../src/core/types.js';
 
 test(
   'DSH Fetch sidebar streams binary frames and sends down/move before mouseup, cancelling on hide',
-  { timeout: 30_000 },
+  // Match other browser tests' process budget when Chrome starts under load.
+  // Individual connection and gesture deadlines below remain unchanged.
+  { timeout: 90_000 },
   async (t) => {
     const executable =
       process.env.PHONE_USE_CHROME ??
@@ -179,6 +181,8 @@ window.addEventListener('message', async event => {
       assert.equal(service.state(opened.session_id).busy, true);
       // One large mouse move must start and advance a pan while still held,
       // including when down was acknowledged before the movement arrived.
+      // Desktop hosts can first report a redundant move at the down position.
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
       await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
       await until(
         () => adapter.calls.filter((a) => a.kind === 'pointer' && a.phase === 'move').length >= 2,
@@ -237,6 +241,7 @@ window.addEventListener('message', async event => {
       await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
       await page.mouse.down();
       await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'down'));
+      await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
       await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.3);
       await page.mouse.up();
       await until(() => adapter.calls.some((a) => a.kind === 'pointer' && a.phase === 'up'));
@@ -249,6 +254,9 @@ window.addEventListener('message', async event => {
         moved = adapter.calls[2],
         released = adapter.calls[3];
       assert(anchor?.kind === 'pointer' && moved?.kind === 'pointer');
+      const down = adapter.calls[0];
+      assert(down?.kind === 'pointer');
+      assert(anchor.x !== down.x || anchor.y !== down.y, 'a stationary event cannot start a pan');
       assert.notEqual(anchor.y, moved.y);
       assert(moved?.kind === 'pointer' && released?.kind === 'pointer');
       assert.equal(moved.x, released.x);

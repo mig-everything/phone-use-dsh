@@ -1115,7 +1115,10 @@
     e.shell.addEventListener('pointermove', (event) => {
       if (!e.directPointer || e.directPointer.end) return;
       const p = point(e, event, e.directPointer.rect);
-      if (p) {
+      const previous = e.directPointer.next ?? e.directPointer.last ?? e.directPointer;
+      // Hosts can emit a pointermove at the unchanged down position. Native
+      // drivers may discard it; it must not count as the first pan sample.
+      if (p && (p.x !== previous.x || p.y !== previous.y)) {
         if (!e.directPointer.last) e.directPointer.firstMove ??= p;
         e.directPointer.next = p;
         void flushPointer(e);
