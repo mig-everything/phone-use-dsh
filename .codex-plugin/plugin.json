@@ -1,6 +1,6 @@
 {
   "name": "phone-use",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "HarmonyOS-first phone control with MCP and screen UI",
   "requires_local_executor": true,
   "skills": "./skills/",

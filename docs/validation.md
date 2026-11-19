@@ -2,6 +2,18 @@
 
 This record separates automated protocol checks, official-host integration and device observations. Passing virtual-device tests is not a claim that every phone or application has been tested.
 
+## 0.9.5 multi-host distributions
+
+Checks on November 19, 2026, on macOS / Apple Silicon:
+
+- Full regression: **150 passed, 0 failed, 0 skipped**, including browser gestures, preview transports, three platform protocols, MCP, OCR and DSH contracts. Formatting, TypeScript and bundled native artifact checks passed.
+- The portable Codex/Work archive was extracted into a temporary directory and installed using `npm ci --omit=dev --ignore-scripts`. Its 19 MCP tools, conversation entrypoint, panel HTML, SDK exports and authenticated HTTP transport passed. Demo operations exercised inspection, control taps, text and screenshots.
+- The MCP/SDK `.tgz` was installed into a separate clean consumer project with production dependencies. The same checks passed through the installed package's exports and launcher. These checks do not borrow the checkout's development dependencies.
+- The DSH archive loaded in official **DSH 0.2.2-rc.1** with independently installed production dependencies. All 14 tools, skill loading, dispatch, conversation isolation, panel reuse, session release, native Fetch handshake and disable/re-enable checks passed without external model requests.
+- All archives passed version, checksum and local-file exclusion checks. Portable plugin manifests must match the runtime version. CI now repeats the portable and core archive installation checks on Linux, macOS and Windows with Node.js 22.
+
+This release separates download channels and clarifies the scanner-facing annotations and `execFile` variable names. It preserves the previous annotation values and device operation behavior. No new physical-device or desktop performance acceptance is claimed; the device observations below remain the relevant evidence. Existing local plugin installations were not replaced during these checks.
+
 ## Public 0.9.4 release
 
 The first public release derives from the 0.9.3 implementation and introduces distribution metadata, explicit supported DSH prerelease ranges, public installation instructions and package validation. Device action semantics remain shared by SDK, MCP and DSH. Release acceptance also found and fixed a shared-core bug: scroll regions advertised in navigation could be rejected after a small node budget or query omitted them from the control index. Advertised regions now retain native evidence separately; this does not authorize taps or text into omitted controls.

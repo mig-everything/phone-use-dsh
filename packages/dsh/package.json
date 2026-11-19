@@ -1,6 +1,6 @@
 {
   "name": "@mig-everything/phone-use-dsh",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "private": true,
   "description": "Phone Use: HarmonyOS, Android and iPhone operations with a native DSH sidebar",
   "type": "module",

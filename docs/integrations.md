@@ -17,7 +17,7 @@ SDK 是核心能力的公开程序入口，“操作层”和“SDK”并不是�
 
 ## 不使用 agent：直接调用 SDK
 
-本项目未发布到公共 npm。从本公开仓库构建共享核心，然后在根目录执行 `npm pack --ignore-scripts`，在自己的项目中 `npm install /absolute/path/phone-use-0.9.4.tgz`。这样安装的是包含 `dist/src` 的 SDK 包。GitHub Release 的 `phone-use-dsh.tgz` 专供 DSH，不是 SDK 根包。
+本项目通过 GitHub Release 分发，无需发布到公共 npm。在自己的 Node.js 22+ 项目中执行 `npm install --ignore-scripts https://github.com/mig-everything/phone-use-dsh/releases/download/core-v0.9.5/phone-use-0.9.5.tgz`；也可从源码执行 `npm ci`、`npm run package:core`，再安装生成的 `.tgz`。SDK 根包同时包含 MCP CLI、`dist/src` 与类型声明。`phone-use-dsh.tgz` 专供 DSH；三类产物的下载与升级见[分发说明](distribution.md)。
 
 下面的例子可在包目录运行；演示模式不需要手机或签名：
 

@@ -9,6 +9,11 @@ import { createHash } from 'node:crypto';
 
 const source = fileURLToPath(new URL('../', import.meta.url));
 const manifest = JSON.parse(await readFile(join(source, 'package.json'), 'utf8'));
+for (const path of ['plugin.json', '.codex-plugin/plugin.json']) {
+  const plugin = JSON.parse(await readFile(join(source, path), 'utf8'));
+  if (plugin.version !== manifest.version)
+    throw new Error(`${path} and shared core versions must match before packaging.`);
+}
 const name = `phone-use-${manifest.version}`;
 const temporary = await mkdtemp(join(tmpdir(), 'phone-use-release-'));
 const folder = join(temporary, name),

@@ -24,6 +24,16 @@ test('official SDK handshake, discovery, screen fallback, errors and resource lo
     await client.connect(b);
     const list = await client.listTools();
     assert.equal(list.tools.length, 19);
+    for (const tool of list.tools) {
+      for (const hint of [
+        'readOnlyHint',
+        'destructiveHint',
+        'idempotentHint',
+        'openWorldHint',
+      ] as const) {
+        assert.equal(typeof tool.annotations?.[hint], 'boolean', `${tool.name}.${hint}`);
+      }
+    }
     for (const tool of list.tools.filter(
       (tool) =>
         tool.name !== 'phone_console' &&

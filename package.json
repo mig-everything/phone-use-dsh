@@ -1,6 +1,6 @@
 {
   "name": "phone-use",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Cross-platform phone use SDK, MCP and DSH plugin for HarmonyOS, Android and iOS",
   "type": "module",
   "repository": {
@@ -97,6 +97,8 @@
     "smoke:multi": "node scripts/smoke-multi.mjs",
     "package:plugin": "npm run build && node scripts/package-plugin.mjs",
     "package:dsh": "npm run build && node scripts/package-dsh.mjs",
+    "package:core": "npm run build && node scripts/package-core.mjs",
+    "check:distributions": "node scripts/check-distributions.mjs",
     "prepack": "npm run build",
     "check:ocr": "node scripts/check-ocr.mjs",
     "build:harmony-bridge": "node scripts/build-harmony-bridge.mjs",

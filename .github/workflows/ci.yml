@@ -24,6 +24,11 @@ jobs:
         run: node scripts/install-work.mjs
       - name: OCR from installed production package
         run: node scripts/check-ocr.mjs --installed
+      - name: Build and install portable plugin and MCP SDK archives
+        run: |
+          npm run package:plugin
+          npm run package:core
+          npm run check:distributions
   test:
     runs-on: ubuntu-latest
     steps:
@@ -47,6 +52,11 @@ jobs:
       - run: npm pack --dry-run
       - run: node scripts/install-work.mjs
       - run: node scripts/check-ocr.mjs --installed
+      - name: Build and install portable plugin and MCP SDK archives
+        run: |
+          npm run package:plugin
+          npm run package:core
+          npm run check:distributions
       - name: Build DSH distribution
         run: npm run package:dsh
       - name: Install pinned official DSH runtime

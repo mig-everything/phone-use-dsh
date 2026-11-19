@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import { z } from 'zod';
 import type { Device, Display } from './types.js';
 
-const exec = promisify(execFile);
+const execFileAsync = promisify(execFile);
 const rect = z
   .object({
     x: z.number().nonnegative(),
@@ -157,7 +157,7 @@ export class DeviceSkins {
       `${device.model}.simdevicetype`,
       'Contents/Resources',
     );
-    const { stdout } = await exec('/usr/bin/plutil', [
+    const { stdout } = await execFileAsync('/usr/bin/plutil', [
       '-convert',
       'json',
       '-o',
@@ -178,7 +178,7 @@ export class DeviceSkins {
       const pdf = async (folder: string, name: string): Promise<Buffer> => {
         if (!/^[\w .-]+$/.test(name)) throw new Error('Invalid native asset');
         const destination = join(dir, `${n++}.png`);
-        await exec(
+        await execFileAsync(
           '/usr/bin/sips',
           ['-s', 'format', 'png', join(folder, `${name}.pdf`), '--out', destination],
           { timeout: 5000 },

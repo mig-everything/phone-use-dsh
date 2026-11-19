@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "phone-use",
-  "version": "0.9.4",
+  "version": "0.9.5",
   "description": "Control native HarmonyOS, Android and iPhone devices through a local MCP bridge, with an optional screen component.",
   "license": "MIT",
   "extensions": {

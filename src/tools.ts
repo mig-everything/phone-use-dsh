@@ -143,7 +143,12 @@ export function createPhoneTools(service: PhoneService) {
       description:
         'Open an exact discovered device ID, reusing its existing session in this host scope. Returns session ID, pause state and runtime capabilities. Hosts providing openai/session metadata get conversation scoping; otherwise the local MCP process shares one scope.',
       inputSchema: { device_id: z.string().min(1) },
-      annotations: { ...control, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     ({ device_id }, extra) =>
       guarded(async () => jsonResult(await service.open(device_id, requestScope(extra)))),
@@ -592,10 +597,10 @@ export function createPhoneTools(service: PhoneService) {
         'Pause/resume ALL capture and control for a session during manual takeover. Resume requires a new observation.',
       inputSchema: { ...sid, paused: z.boolean() },
       annotations: {
-        ...control,
+        readOnlyHint: false,
         destructiveHint: false,
-        openWorldHint: false,
         idempotentHint: true,
+        openWorldHint: false,
       },
     },
     ({ session_id, paused }, extra) =>
@@ -609,7 +614,12 @@ export function createPhoneTools(service: PhoneService) {
     {
       description: 'Release the device session and its exclusive lock.',
       inputSchema: sid,
-      annotations: { ...control, destructiveHint: false, openWorldHint: false },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
     },
     ({ session_id }, extra) =>
       guarded(async () => {
